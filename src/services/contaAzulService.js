@@ -5,6 +5,7 @@
  */
 
 const DEFAULT_CLIENT_ID = '510utbibu9gb6002lerhav28tk'
+const DEFAULT_CLIENT_SECRET = '7iotvc8bqcunp3m21u6htv5ti639skkvpm9eaqjosg5ks4ufhi4'
 const DEFAULT_COMPANY_ID = '3272538'
 const DEFAULT_USER_EMAIL = 'drilex.fin@amicigestao.com.br'
 const DEFAULT_REDIRECT_URI = 'https://portal-amicigestao.vercel.app/oauth/conta-azul/callback'
@@ -16,7 +17,7 @@ export function getContaAzulGlobalConfig() {
   const dynamicOriginUri = typeof window !== 'undefined' ? `${window.location.origin}/oauth/conta-azul/callback` : DEFAULT_REDIRECT_URI
   return {
     clientId: localStorage.getItem('amici_ca_client_id') || import.meta.env.VITE_CONTA_AZUL_CLIENT_ID || DEFAULT_CLIENT_ID,
-    clientSecret: localStorage.getItem('amici_ca_client_secret') || import.meta.env.VITE_CONTA_AZUL_CLIENT_SECRET || '',
+    clientSecret: localStorage.getItem('amici_ca_client_secret') || import.meta.env.VITE_CONTA_AZUL_CLIENT_SECRET || DEFAULT_CLIENT_SECRET,
     redirectUri: localStorage.getItem('amici_ca_redirect_uri') || import.meta.env.VITE_CONTA_AZUL_REDIRECT_URI || dynamicOriginUri,
     accessToken: localStorage.getItem('amici_ca_access_token') || import.meta.env.VITE_CONTA_AZUL_ACCESS_TOKEN || '',
     refreshToken: localStorage.getItem('amici_ca_refresh_token') || import.meta.env.VITE_CONTA_AZUL_REFRESH_TOKEN || '',
@@ -241,24 +242,89 @@ export async function testContaAzulApiLive(tokenOverride) {
 }
 
 /**
+ * Troca o Authorization Code retornado pela Conta Azul por Access Token e Refresh Token
+ */
+export async function exchangeContaAzulCodeForToken(code) {
+  const config = getContaAzulGlobalConfig()
+  const clientId = config.clientId || DEFAULT_CLIENT_ID
+  const clientSecret = config.clientSecret || DEFAULT_CLIENT_SECRET
+  const redirectUri = config.redirectUri || DEFAULT_REDIRECT_URI
+
+  const basicAuth = btoa(`${clientId}:${clientSecret}`)
+  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  const tokenUrl = isDev ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token'
+
+  const bodyParams = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: code.trim(),
+    redirect_uri: redirectUri
+  })
+
+  try {
+    let res = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basicAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: bodyParams
+    })
+
+    if (!res.ok && isDev) {
+      res = await fetch('https://api.contaazul.com/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${basicAuth}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: bodyParams
+      })
+    }
+
+    if (res.ok) {
+      const data = await res.json()
+      if (data.access_token) {
+        saveContaAzulGlobalConfig(
+          clientId,
+          clientSecret,
+          redirectUri,
+          data.access_token,
+          data.refresh_token || config.refreshToken
+        )
+        return { success: true, accessToken: data.access_token, refreshToken: data.refresh_token }
+      }
+    }
+
+    const errText = await res.text()
+    return { success: false, error: errText || `HTTP ${res.status}` }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+}
+
+/**
  * Tenta renovar o Access Token automaticamente usando o Refresh Token OAuth2
  */
 export async function refreshContaAzulAccessToken() {
   const config = getContaAzulGlobalConfig()
   if (!config.refreshToken) return { success: false, error: 'Nenhum Refresh Token configurado' }
 
+  const clientId = config.clientId || DEFAULT_CLIENT_ID
+  const clientSecret = config.clientSecret || DEFAULT_CLIENT_SECRET
+  const basicAuth = btoa(`${clientId}:${clientSecret}`)
+
   try {
-    const tokenUrl = import.meta.env.DEV ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token'
+    const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    const tokenUrl = isDev ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token'
     const res = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
+        'Authorization': `Basic ${basicAuth}`,
         'Content-Type': 'application/x-www-form-urlencoded'
       },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: config.refreshToken,
-        client_id: config.clientId,
-        client_secret: config.clientSecret || ''
+        refresh_token: config.refreshToken
       })
     })
 
@@ -266,8 +332,8 @@ export async function refreshContaAzulAccessToken() {
       const data = await res.json()
       if (data.access_token) {
         saveContaAzulGlobalConfig(
-          config.clientId,
-          config.clientSecret,
+          clientId,
+          clientSecret,
           config.redirectUri,
           data.access_token,
           data.refresh_token || config.refreshToken
@@ -602,12 +668,12 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
 export function buildContaAzulAuthUrl(clientIdOverride, stateParam) {
   const config = getContaAzulGlobalConfig()
   const clientId = clientIdOverride || config.clientId || DEFAULT_CLIENT_ID
-  const rawRedirectUri = config.redirectUri || (typeof window !== 'undefined' ? `${window.location.origin}/oauth/conta-azul/callback` : 'http://localhost:5173/oauth/conta-azul/callback')
+  const rawRedirectUri = config.redirectUri || (typeof window !== 'undefined' ? `${window.location.origin}/oauth/conta-azul/callback` : DEFAULT_REDIRECT_URI)
   const redirectUri = encodeURIComponent(rawRedirectUri)
   const state = encodeURIComponent(stateParam || config.state || 'amici_bpo_auth')
 
-  // O escopo oficial exigido pela API da Conta Azul no endpoint /auth/authorize é 'sales'
-  return `https://api.contaazul.com/auth/authorize?redirect_uri=${redirectUri}&client_id=${clientId}&scope=sales&state=${state}`
+  // URL Oficial fornecida diretamente no painel de desenvolvedores da Conta Azul
+  return `https://login.contaazul.com/#/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}`
 }
 
 

@@ -41,7 +41,8 @@ import {
   fetchContaAzulPessoas,
   getTokenExpirationInfo,
   isContaAzulTokenExpired,
-  buildContaAzulAuthUrl
+  buildContaAzulAuthUrl,
+  exchangeContaAzulCodeForToken
 } from './services/contaAzulService'
 
 const DRILLEX_CLIENT = {
@@ -150,30 +151,53 @@ export function App() {
     localStorage.removeItem('amici_user_session')
   }
 
-  // Interceptar retorno do fluxo OAuth da Conta Azul caso venha na URL
+  // Interceptar retorno do fluxo OAuth da Conta Azul caso venha na URL (code ou access_token)
   useEffect(() => {
-    try {
-      const searchParams = new URLSearchParams(window.location.search)
-      const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'))
-      
-      const newAccessToken = searchParams.get('access_token') || hashParams.get('access_token')
-      const newRefreshToken = searchParams.get('refresh_token') || hashParams.get('refresh_token')
-      
-      if (newAccessToken) {
-        saveContaAzulGlobalConfig(
-          tokenConfig.clientId,
-          tokenConfig.clientSecret,
-          tokenConfig.redirectUri,
-          newAccessToken,
-          newRefreshToken || tokenConfig.refreshToken
-        )
-        setSyncToast('Nova autorização da Conta Azul salva com sucesso!')
-        // Limpa os parâmetros da URL sem recarregar
-        window.history.replaceState({}, document.title, window.location.pathname)
+    async function processOAuthCallback() {
+      try {
+        const searchParams = new URLSearchParams(window.location.search)
+        const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'))
+        
+        const code = searchParams.get('code') || hashParams.get('code')
+        const newAccessToken = searchParams.get('access_token') || hashParams.get('access_token')
+        const newRefreshToken = searchParams.get('refresh_token') || hashParams.get('refresh_token')
+        
+        if (code) {
+          setSyncToast('Processando código de autorização da Conta Azul...')
+          const res = await exchangeContaAzulCodeForToken(code)
+          if (res.success) {
+            setTokenVersion(v => v + 1)
+            setSyncToast('✓ Conta Azul conectada com sucesso! Atualizando dados...')
+            window.history.replaceState({}, document.title, window.location.pathname)
+            setTimeout(() => {
+              handleSyncApi()
+            }, 600)
+          } else {
+            console.error('Erro na troca de código por token:', res.error)
+            setSyncToast(`Aviso: ${res.error}`)
+            window.history.replaceState({}, document.title, window.location.pathname)
+          }
+        } else if (newAccessToken) {
+          saveContaAzulGlobalConfig(
+            tokenConfig.clientId,
+            tokenConfig.clientSecret,
+            tokenConfig.redirectUri,
+            newAccessToken,
+            newRefreshToken || tokenConfig.refreshToken
+          )
+          setTokenVersion(v => v + 1)
+          setSyncToast('✓ Nova autorização da Conta Azul salva com sucesso!')
+          window.history.replaceState({}, document.title, window.location.pathname)
+          setTimeout(() => {
+            handleSyncApi()
+          }, 600)
+        }
+      } catch (e) {
+        console.warn('Aviso ao processar retorno OAuth:', e)
       }
-    } catch (e) {
-      console.warn('Aviso ao processar retorno OAuth:', e)
     }
+
+    processOAuthCallback()
   }, [])
 
   // Salvar estados no localStorage para persistência

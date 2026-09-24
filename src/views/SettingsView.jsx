@@ -209,28 +209,16 @@ CREATE TABLE IF NOT EXISTS public.payables (
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white text-xs font-bold shadow-md shadow-amber-950/40 transition-all active:scale-95"
               >
                 <Key className="w-3.5 h-3.5 text-white" />
-                <span>Renovar Sessão / Colar Token</span>
+                <span>Colar Token Manual</span>
               </button>
 
-              {!isDefaultClientId ? (
-                <a
-                  href={buildContaAzulAuthUrl(contaAzulConfig.clientId)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700/60 text-xs font-semibold text-cyan-300 transition-all shadow-sm"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Conectar OAuth Oficial</span>
-                </a>
-              ) : (
-                <a
-                  href="https://desenvolvedor.contaazul.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 transition-all shadow-sm"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Portal Desenvolvedor</span>
-                </a>
-              )}
+              <a
+                href={buildContaAzulAuthUrl(contaAzulConfig.clientId)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 text-white text-xs font-bold shadow-md shadow-cyan-950/40 transition-all active:scale-95"
+              >
+                <Zap className="w-3.5 h-3.5 text-white" />
+                <span>Conectar via Conta Azul (1 Clique)</span>
+              </a>
             </div>
           </div>
 
