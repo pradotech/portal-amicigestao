@@ -245,7 +245,7 @@ export async function testContaAzulApiLive(tokenOverride) {
 }
 
 /**
- * Troca o Authorization Code retornado pela Conta Azul por Access Token e Refresh Token
+ * Troca o Authorization Code retornado pela Conta Azul por Access Token e Refresh Token (API v2)
  */
 export async function exchangeContaAzulCodeForToken(code) {
   const config = getContaAzulGlobalConfig()
@@ -255,7 +255,12 @@ export async function exchangeContaAzulCodeForToken(code) {
 
   const basicAuth = btoa(`${clientId}:${clientSecret}`)
   const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  const tokenUrl = isDev ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token'
+  
+  const tokenUrls = [
+    isDev ? '/api-contaazul/oauth/token' : 'https://api-v2.contaazul.com/oauth/token',
+    'https://api-v2.contaazul.com/oauth/token',
+    isDev ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token'
+  ]
 
   const bodyParams = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -263,18 +268,11 @@ export async function exchangeContaAzulCodeForToken(code) {
     redirect_uri: redirectUri
   })
 
-  try {
-    let res = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: bodyParams
-    })
+  let lastError = null
 
-    if (!res.ok && isDev) {
-      res = await fetch('https://api.contaazul.com/oauth2/token', {
+  for (const tokenUrl of tokenUrls) {
+    try {
+      const res = await fetch(tokenUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${basicAuth}`,
@@ -282,31 +280,33 @@ export async function exchangeContaAzulCodeForToken(code) {
         },
         body: bodyParams
       })
-    }
 
-    if (res.ok) {
-      const data = await res.json()
-      if (data.access_token) {
-        saveContaAzulGlobalConfig(
-          clientId,
-          clientSecret,
-          redirectUri,
-          data.access_token,
-          data.refresh_token || config.refreshToken
-        )
-        return { success: true, accessToken: data.access_token, refreshToken: data.refresh_token }
+      if (res.ok) {
+        const data = await res.json()
+        if (data.access_token) {
+          saveContaAzulGlobalConfig(
+            clientId,
+            clientSecret,
+            redirectUri,
+            data.access_token,
+            data.refresh_token || config.refreshToken
+          )
+          return { success: true, accessToken: data.access_token, refreshToken: data.refresh_token }
+        }
+      } else {
+        const errText = await res.text()
+        lastError = errText || `HTTP ${res.status}`
       }
+    } catch (err) {
+      lastError = err.message
     }
-
-    const errText = await res.text()
-    return { success: false, error: errText || `HTTP ${res.status}` }
-  } catch (err) {
-    return { success: false, error: err.message }
   }
+
+  return { success: false, error: lastError || 'Falha ao trocar código de autorização por token' }
 }
 
 /**
- * Tenta renovar o Access Token automaticamente usando o Refresh Token OAuth2
+ * Tenta renovar o Access Token automaticamente usando o Refresh Token OAuth2 (API v2)
  */
 export async function refreshContaAzulAccessToken() {
   const config = getContaAzulGlobalConfig()
@@ -316,39 +316,47 @@ export async function refreshContaAzulAccessToken() {
   const clientSecret = config.clientSecret || DEFAULT_CLIENT_SECRET
   const basicAuth = btoa(`${clientId}:${clientSecret}`)
 
-  try {
-    const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    const tokenUrl = isDev ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token'
-    const res = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: config.refreshToken
-      })
-    })
+  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  const tokenUrls = [
+    isDev ? '/api-contaazul/oauth/token' : 'https://api-v2.contaazul.com/oauth/token',
+    'https://api-v2.contaazul.com/oauth/token',
+    isDev ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token'
+  ]
 
-    if (res.ok) {
-      const data = await res.json()
-      if (data.access_token) {
-        saveContaAzulGlobalConfig(
-          clientId,
-          clientSecret,
-          config.redirectUri,
-          data.access_token,
-          data.refresh_token || config.refreshToken
-        )
-        console.log('✓ Token da Conta Azul renovado automaticamente com sucesso!')
-        return { success: true, accessToken: data.access_token }
+  for (const tokenUrl of tokenUrls) {
+    try {
+      const res = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${basicAuth}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: config.refreshToken
+        })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        if (data.access_token) {
+          saveContaAzulGlobalConfig(
+            clientId,
+            clientSecret,
+            config.redirectUri,
+            data.access_token,
+            data.refresh_token || config.refreshToken
+          )
+          console.log('✓ Token da Conta Azul renovado automaticamente com sucesso!')
+          return { success: true, accessToken: data.access_token }
+        }
       }
+    } catch (err) {
+      console.warn('Tentando próximo endpoint de token:', err.message)
     }
-    return { success: false, error: `Status ${res.status}` }
-  } catch (err) {
-    return { success: false, error: err.message }
   }
+
+  return { success: false, error: 'Não foi possível renovar o token automaticamente' }
 }
 
 /**
@@ -675,8 +683,8 @@ export function buildContaAzulAuthUrl(clientIdOverride, stateParam) {
   const redirectUri = encodeURIComponent(rawRedirectUri)
   const state = encodeURIComponent(stateParam || config.state || 'amici_bpo_auth')
 
-  // URL Oficial gerada diretamente pelo portal de desenvolvedores da Conta Azul
-  return `https://login.contaazul.com/#/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}`
+  // URL Oficial da Conta Azul OpenAPI v2 com os escopos obrigatórios
+  return `https://login.contaazul.com/#/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}&scope=openid+profile+aws.cognito.signin.user.admin`
 }
 
 
