@@ -228,9 +228,10 @@ export async function fetchContaAzulPessoas(tamanho = 100, tokenOverride) {
 /**
  * 5. GET /v1/venda/busca (Vendas e Contas a Receber da Conta Azul)
  */
-export async function fetchContaAzulVendas(pagina = 1, tamanho = 100, tokenOverride) {
+export async function fetchContaAzulVendas(pagina = 1, tamanho = 100, queryParams = '', tokenOverride) {
   try {
-    const res = await fetchContaAzulApi(`/v1/venda/busca?pagina=${pagina}&tamanho_pagina=${tamanho}`, tokenOverride)
+    const q = queryParams ? `&${queryParams}` : ''
+    const res = await fetchContaAzulApi(`/v1/venda/busca?pagina=${pagina}&tamanho_pagina=${tamanho}${q}`, tokenOverride)
     if (!res.ok) {
       if (res.status === 401) {
         console.warn('⚠️ Conta Azul API: Token expirado (401) em /v1/venda/busca.')
@@ -246,22 +247,83 @@ export async function fetchContaAzulVendas(pagina = 1, tamanho = 100, tokenOverr
 }
 
 /**
- * 6. GET /v1/financeiro/eventos-financeiros (Eventos Financeiros / Parcelas)
+ * Busca abrangente de todas as vendas da Conta Azul com paginação completa e extração profunda de parcelas
  */
-export async function fetchContaAzulEventosFinanceiros(dataInicio, dataFim, tokenOverride) {
+export async function fetchAllRecentContaAzulVendas(tokenOverride) {
+  const allSalesMap = new Map()
+
+  // 1. Busca todas as páginas de vendas da Conta Azul (paginação 1 a 5)
   try {
-    let url = '/v1/financeiro/eventos-financeiros'
-    if (dataInicio && dataFim) {
-      url += `?data_inicio=${dataInicio}&data_fim=${dataFim}`
-    }
-    const res = await fetchContaAzulApi(url, tokenOverride)
-    if (!res.ok) return []
-    const data = await res.json()
-    return data.itens || data.items || []
-  } catch (err) {
-    console.warn('Aviso ao buscar eventos financeiros:', err.message)
-    return []
+    const pagePromises = [1, 2, 3, 4, 5].map(p =>
+      fetchContaAzulVendas(p, 100, '', tokenOverride)
+    )
+    const pageResults = await Promise.all(pagePromises)
+    pageResults.flat().forEach(v => {
+      if (v && v.id) allSalesMap.set(v.id, v)
+    })
+  } catch (e) {
+    console.warn('Aviso ao paginar vendas da Conta Azul:', e.message)
   }
+
+  const allVendasList = Array.from(allSalesMap.values())
+  if (allVendasList.length === 0) return []
+
+  // 2. Busca detalhes com parcelas das vendas de 2026 em lotes para obter datas de vencimento reais
+  const vendasRecentes = allVendasList.filter(v =>
+    (v.data && v.data >= '2026-01-01') || (v.numero && Number(v.numero) >= 2000)
+  )
+
+  const detailedVendasMap = new Map()
+  const BATCH_SIZE = 20
+  for (let i = 0; i < vendasRecentes.length; i += BATCH_SIZE) {
+    const batch = vendasRecentes.slice(i, i + BATCH_SIZE)
+    const details = await Promise.all(
+      batch.map(async (v) => {
+        try {
+          const res = await fetchContaAzulApi(`/v1/venda/${v.id}`, tokenOverride)
+          if (res.ok) {
+            const data = await res.json()
+            return { id: v.id, ...v, ...(data.venda || data), cliente: data.cliente || v.cliente }
+          }
+        } catch {}
+        return v
+      })
+    )
+    details.forEach(d => {
+      if (d && d.id) detailedVendasMap.set(d.id, d)
+    })
+  }
+
+  return allVendasList.map(v => detailedVendasMap.get(v.id) || v)
+}
+
+/**
+ * 6. GET /v1/financeiro/eventos-financeiros (Eventos Financeiros, Contas a Pagar e Despesas)
+ */
+export async function fetchAllContaAzulDespesas(tokenOverride) {
+  const allDespesasMap = new Map()
+
+  // 1. Contas a pagar e eventos
+  try {
+    const res = await fetchContaAzulApi('/v1/financeiro/eventos-financeiros?pagina=1&tamanho_pagina=100', tokenOverride)
+    if (res.ok) {
+      const data = await res.json()
+      const list = data.itens || data.items || []
+      list.forEach(item => { if (item && item.id) allDespesasMap.set(item.id, item) })
+    }
+  } catch (err) {}
+
+  // 2. Compras
+  try {
+    const resCompras = await fetchContaAzulApi('/v1/compras?pagina=1&tamanho_pagina=100', tokenOverride)
+    if (resCompras.ok) {
+      const data = await resCompras.json()
+      const list = data.itens || data.items || []
+      list.forEach(item => { if (item && item.id) allDespesasMap.set(item.id, item) })
+    }
+  } catch (err) {}
+
+  return Array.from(allDespesasMap.values())
 }
 
 /**
@@ -457,10 +519,13 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
   onProgress({ step: 'pessoas', message: `Importando fornecedores e clientes de ${clientTradeName} (/v1/pessoas)...`, progress: 40 })
   let rawPessoas = await fetchContaAzulPessoas(100, clientToken)
 
-  onProgress({ step: 'vendas', message: `Importando vendas e contas a receber de ${clientTradeName} (/v1/venda/busca)...`, progress: 60 })
-  let rawVendas = await fetchContaAzulVendas(1, 100, clientToken)
+  onProgress({ step: 'vendas', message: `Importando vendas e contas a receber de ${clientTradeName} (/v1/venda/busca)...`, progress: 50 })
+  let rawVendas = await fetchAllRecentContaAzulVendas(clientToken)
 
-  onProgress({ step: 'categorias', message: `Importando plano de contas e categorias DRE de ${clientTradeName} (/v1/categorias)...`, progress: 80 })
+  onProgress({ step: 'despesas', message: `Importando despesas e contas a pagar de ${clientTradeName} (/v1/financeiro)...`, progress: 70 })
+  let rawDespesas = await fetchAllContaAzulDespesas(clientToken)
+
+  onProgress({ step: 'categorias', message: `Importando plano de contas e categorias DRE de ${clientTradeName} (/v1/categorias)...`, progress: 85 })
   let rawCategorias = await fetchContaAzulCategorias(clientToken)
 
   // Se a API não respondeu dados (sessão expirada), NÃO zera o banco nem os cards
@@ -639,6 +704,40 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
     })
   }
 
+  // 3. Mapear Despesas e Contas a Pagar Reais da Conta Azul
+  const mappedPayables = []
+  if (rawDespesas && rawDespesas.length > 0) {
+    rawDespesas.forEach((d, idx) => {
+      const supplierName = d.fornecedor?.nome || d.fornecedor_nome || d.pessoa?.nome || d.favorecido || d.nome || 'Fornecedor'
+      const dueDate = extractDate(d.data_vencimento) || extractDate(d.vencimento) || extractDate(d.data) || extractDate(d.data_emissao) || todayStr
+      const amount = Number(d.valor || d.total || d.valor_bruto || d.valor_liquido || 0)
+      const rawStatus = String(d.status || d.situacao?.nome || d.situacao || '').toUpperCase()
+      const isPaid = rawStatus.includes('QUITAD') || rawStatus.includes('PAGO') || rawStatus.includes('ACQUITTED') || Boolean(d.data_pagamento)
+
+      let status = 'scheduled'
+      if (isPaid) {
+        status = 'paid'
+      } else if (dueDate < todayStr) {
+        status = 'overdue'
+      } else {
+        status = 'scheduled'
+      }
+
+      mappedPayables.push({
+        id: d.id || `pay-${clientId}-${idx}`,
+        caPayableId: String(d.id || Math.random()),
+        clientId: clientId,
+        supplier: supplierName,
+        category: d.categoria?.nome || d.categoria_nome || 'Despesas Operacionais',
+        description: d.descricao || d.historico || `Pagamento - ${supplierName}`,
+        amount: amount,
+        dueDate: dueDate,
+        status: status,
+        barcode: d.codigo_barras || d.linha_digitavel || ''
+      })
+    })
+  }
+
   const timestamp = new Date().toISOString()
   onProgress({ step: 'done', message: `Sincronização de ${clientTradeName} concluída com sucesso!`, progress: 100, timestamp })
 
@@ -650,12 +749,15 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
     rawCategorias: rawCategorias,
     rawCentros: rawCentros,
     rawVendas: rawVendas,
+    rawDespesas: rawDespesas,
     mappedReceivables: mappedReceivables,
+    mappedPayables: mappedPayables,
     categoriesCount: rawCategorias.length,
     rawBancosCount: rawBancos.length,
     rawPessoasCount: rawPessoas.length,
     rawCentrosCount: rawCentros.length,
-    rawVendasCount: rawVendas.length
+    rawVendasCount: mappedReceivables.length,
+    rawDespesasCount: mappedPayables.length
   }
 }
 

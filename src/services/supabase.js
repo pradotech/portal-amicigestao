@@ -632,7 +632,31 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
       }
     }
 
-    // e) Atualizar Status e Horário da Conexão Conta Azul
+    // e) Salvar Contas a Pagar Reais da Conta Azul
+    if (syncData.mappedPayables && syncData.mappedPayables.length > 0) {
+      try {
+        await supabase.from('payables').delete().eq('client_id', resolvedClientId)
+        
+        const payablesPayload = syncData.mappedPayables.map(p => ({
+          client_id: resolvedClientId,
+          ca_payable_id: p.caPayableId || p.id,
+          supplier_name: p.supplier,
+          category_name: p.category || 'Fornecedores & Insumos',
+          description: p.description,
+          amount: Number(p.amount || 0),
+          due_date: p.dueDate,
+          status: p.status,
+          barcode: p.barcode || null,
+          notes: 'Sincronizado via Conta Azul V2'
+        }))
+
+        await supabase.from('payables').insert(payablesPayload)
+      } catch (err) {
+        console.warn('Aviso ao persistir payables no Supabase:', err)
+      }
+    }
+
+    // f) Atualizar Status e Horário da Conexão Conta Azul
     try {
       await supabase.from('conta_azul_integrations').upsert({
         client_id: resolvedClientId,

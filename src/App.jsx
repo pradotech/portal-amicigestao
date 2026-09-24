@@ -227,6 +227,10 @@ export function App() {
           setReceivables(syncResult.mappedReceivables)
         }
 
+        if (syncResult.mappedPayables && syncResult.mappedPayables.length > 0) {
+          setPayables(syncResult.mappedPayables)
+        }
+
         // Persiste as entidades cadastrais e conexão no banco Supabase
         await saveClientToSupabase(targetClient)
         await persistContaAzulSyncToSupabase(targetId, {
