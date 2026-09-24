@@ -225,54 +225,54 @@ export function App() {
     }
   }, [selectedClient])
 
-  useEffect(() => {
-    async function loadDataFromSupabase() {
-      const creds = getSupabaseCredentials()
-      setSupabaseConfigured(creds.isConfigured)
+  const loadDataFromSupabase = async (clientIdOverride) => {
+    const creds = getSupabaseCredentials()
+    setSupabaseConfigured(creds.isConfigured)
 
-      if (creds.isConfigured) {
-        try {
-          const targetId = selectedClient?.id || 'd0000000-0000-0000-0000-000000000001'
+    if (creds.isConfigured) {
+      try {
+        const targetId = clientIdOverride || selectedClient?.id || 'd0000000-0000-0000-0000-000000000001'
 
-          // 1. Carregar Clientes do Supabase
-          const supaClients = await fetchClientsFromSupabase()
-          if (supaClients && supaClients.length > 0) {
-            setClients(supaClients)
-          }
-
-          // 2. Carregar Contas a Pagar do Supabase
-          const supaPayables = await fetchPayablesFromSupabase(targetId)
-          if (supaPayables && supaPayables.length > 0) {
-            setPayables(supaPayables)
-          }
-
-          // 3. Carregar Contas a Receber do Supabase
-          const supaReceivables = await fetchReceivablesFromSupabase(targetId)
-          if (supaReceivables && supaReceivables.length > 0) {
-            setReceivables(supaReceivables)
-          }
-
-          // 4. Carregar Transações do Supabase
-          const supaTx = await fetchBankTransactionsFromSupabase(targetId)
-          if (supaTx && supaTx.length > 0) {
-            setTransactions(supaTx)
-          }
-
-          // 5. Carregar Parceiros do Supabase
-          const supaPessoas = await fetchCounterpartiesFromSupabase(targetId)
-          if (supaPessoas && supaPessoas.length > 0) {
-            setRawPessoas(supaPessoas)
-          }
-        } catch (err) {
-          console.warn('Erro ao carregar dados do Supabase:', err)
+        // 1. Carregar Clientes do Supabase
+        const supaClients = await fetchClientsFromSupabase()
+        if (supaClients && supaClients.length > 0) {
+          setClients(supaClients)
         }
+
+        // 2. Carregar Contas a Pagar do Supabase (Fonte Única da Verdade)
+        const supaPayables = await fetchPayablesFromSupabase(targetId)
+        if (supaPayables && supaPayables.length > 0) {
+          setPayables(supaPayables)
+        }
+
+        // 3. Carregar Contas a Receber do Supabase (Fonte Única da Verdade)
+        const supaReceivables = await fetchReceivablesFromSupabase(targetId)
+        if (supaReceivables && supaReceivables.length > 0) {
+          setReceivables(supaReceivables)
+        }
+
+        // 4. Carregar Transações do Supabase (Fonte Única da Verdade)
+        const supaTx = await fetchBankTransactionsFromSupabase(targetId)
+        if (supaTx && supaTx.length > 0) {
+          setTransactions(supaTx)
+        }
+
+        // 5. Carregar Fornecedores e Clientes do Supabase
+        const supaPessoas = await fetchCounterpartiesFromSupabase(targetId)
+        if (supaPessoas && supaPessoas.length > 0) {
+          setRawPessoas(supaPessoas)
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar dados do Supabase:', err)
       }
     }
+  }
 
-    loadDataFromSupabase()
+  useEffect(() => {
+    loadDataFromSupabase(selectedClient?.id)
   }, [selectedClient?.id])
 
-  // Sincronizar dados reais diretamente da API da Conta Azul para o cliente selecionado
+  // Sincronizar cadastros da Conta Azul mantendo o Supabase como fonte única de lançamentos financeiros
   const handleSyncApi = async (targetClient = selectedClient) => {
     if (isSyncing || !targetClient) return
     setIsSyncing(true)
@@ -282,35 +282,34 @@ export function App() {
         setSyncProgress(prog)
       })
 
-      if (syncResult && syncResult.success) {
-        if (syncResult.payables && syncResult.payables.length > 0) setPayables(syncResult.payables)
-        if (syncResult.receivables && syncResult.receivables.length > 0) setReceivables(syncResult.receivables)
-        if (syncResult.transactions && syncResult.transactions.length > 0) setTransactions(syncResult.transactions)
-        
-        // Puxa lista de pessoas da API para alimentar fornecedores e clientes
-        const tokenOverride = targetClient?.contaAzulConfig?.accessToken
-        const pessoas = await fetchContaAzulPessoas(100, tokenOverride)
-        if (pessoas && pessoas.length > 0) setRawPessoas(pessoas)
+      const targetId = targetClient?.id || 'd0000000-0000-0000-0000-000000000001'
 
-        // Salva tudo diretamente no banco Supabase
+      if (syncResult && syncResult.success) {
+        // Puxa lista atualizada de contatos/fornecedores/clientes da Conta Azul para o Supabase
+        const tokenOverride = targetClient?.contaAzulConfig?.accessToken
+        const pessoas = (syncResult.rawPessoas && syncResult.rawPessoas.length > 0)
+          ? syncResult.rawPessoas
+          : await fetchContaAzulPessoas(100, tokenOverride)
+
+        if (pessoas && pessoas.length > 0) {
+          setRawPessoas(pessoas)
+        }
+
+        // Persiste as entidades cadastrais e conexão no banco Supabase
         await saveClientToSupabase(targetClient)
-        await persistContaAzulSyncToSupabase(targetClient.id, {
+        await persistContaAzulSyncToSupabase(targetId, {
           ...syncResult,
           rawPessoas: pessoas
         })
 
-        setSyncToast(`Dados de ${targetClient.tradeName} sincronizados e gravados no Supabase!`)
-      } else {
-        // Se a API retornou 401 ou erro, recarrega do Supabase sem zerar nada
-        const targetId = targetClient?.id || 'd0000000-0000-0000-0000-000000000001'
-        const supaPayables = await fetchPayablesFromSupabase(targetId)
-        if (supaPayables && supaPayables.length > 0) setPayables(supaPayables)
-        const supaReceivables = await fetchReceivablesFromSupabase(targetId)
-        if (supaReceivables && supaReceivables.length > 0) setReceivables(supaReceivables)
-        const supaTx = await fetchBankTransactionsFromSupabase(targetId)
-        if (supaTx && supaTx.length > 0) setTransactions(supaTx)
+        // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase
+        await loadDataFromSupabase(targetId)
 
-        setSyncToast('Sessão Conta Azul expirada (401). Exibindo dados salvos no Supabase!')
+        setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados! Dados lidos 100% do banco Supabase.`)
+      } else {
+        // Se a API retornou expirada (401), recarrega os dados intactos do Supabase
+        await loadDataFromSupabase(targetId)
+        setSyncToast('Sessão Conta Azul expirada (401). Exibindo dados salvos no banco Supabase!')
       }
     } catch (err) {
       console.error('Erro na sincronização:', err)
@@ -323,10 +322,9 @@ export function App() {
   }
 
   // Ao selecionar um cliente na tela principal
-  const handleSelectClient = async (client) => {
+  const handleSelectClient = (client) => {
     setSelectedClient(client)
     setActiveTab('dashboard')
-    await handleSyncApi(client)
   }
 
   // Adicionar um novo cliente / empresa no BPO

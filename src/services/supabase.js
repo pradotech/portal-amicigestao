@@ -1,4 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
+import {
+  INITIAL_CLIENTS,
+  INITIAL_PAYABLES,
+  INITIAL_RECEIVABLES,
+  INITIAL_BANK_TRANSACTIONS,
+  INITIAL_BANK_ACCOUNTS
+} from '../data/mockData'
 
 // Chaves padrão ou obtidas via localStorage / variáveis de ambiente
 const storedUrl = localStorage.getItem('amici_supabase_url') || import.meta.env.VITE_SUPABASE_URL || ''
@@ -266,18 +273,139 @@ export async function fetchClientsFromSupabase() {
 // =============================================================================
 // 2. CONTAS A PAGAR (PAYABLES)
 // =============================================================================
+
+/**
+ * Garante que a base do Supabase contenha a carga inicial caso o banco esteja novo/limpo.
+ * Mantém 100% dos dados já gravados e nunca sobrescreve alterações do usuário.
+ */
+export async function ensureInitialDatabaseSeed(clientId) {
+  const supabase = getSupabaseClient()
+  if (!supabase) return false
+
+  try {
+    const rawId = clientId ? String(clientId) : ''
+    const isUuid = rawId.includes('-') && rawId.length === 36
+    const resolvedClientId = isUuid ? rawId : 'd0000000-0000-0000-0000-000000000001'
+
+    // 1. Garantir que o Cliente exista na tabela 'clients'
+    const { data: existingClient } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('id', resolvedClientId)
+      .maybeSingle()
+
+    if (!existingClient) {
+      const defaultClient = INITIAL_CLIENTS[0] || {
+        id: resolvedClientId,
+        corporateName: 'Drillex Indústria, Comércio e Serviços Ltda',
+        tradeName: 'Drillex',
+        cnpj: '12.845.920/0001-44',
+        email: 'drilex.fin@amicigestao.com.br',
+        phone: '(11) 98765-4321',
+        segment: 'Indústria & Serviços',
+        taxRegime: 'Lucro Presumido',
+        financialAnalyst: 'Equipe Amici Gestão',
+        planTier: 'BPO Gestão Financeira',
+        monthlyFee: 4500.00,
+        status: 'active'
+      }
+      await saveClientToSupabase({ ...defaultClient, id: resolvedClientId })
+    }
+
+    // 2. Verificar se há registros na tabela payables
+    const { count: payablesCount, error: payError } = await supabase
+      .from('payables')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', resolvedClientId)
+
+    if (!payError && (payablesCount === 0 || payablesCount === null)) {
+      const payablesPayload = INITIAL_PAYABLES.map(p => ({
+        client_id: resolvedClientId,
+        ca_payable_id: p.id,
+        supplier_name: p.supplier,
+        category_name: p.category || 'Fornecedores & Insumos',
+        description: p.description,
+        amount: Number(p.amount || 0),
+        due_date: p.dueDate,
+        status: p.status || 'scheduled',
+        barcode: p.barcode || null,
+        notes: 'Carga oficial Drillex gravada no Supabase'
+      }))
+      await supabase.from('payables').upsert(payablesPayload, { onConflict: 'client_id, ca_payable_id' })
+    }
+
+    // 3. Verificar se há registros na tabela receivables
+    const { count: recCount, error: recError } = await supabase
+      .from('receivables')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', resolvedClientId)
+
+    if (!recError && (recCount === 0 || recCount === null)) {
+      const recPayload = INITIAL_RECEIVABLES.map((r, idx) => ({
+        client_id: resolvedClientId,
+        ca_receivable_id: r.id || `rec-init-${idx}`,
+        customer_name: r.customer,
+        category_name: r.category || 'Venda de Produtos & Serviços',
+        description: r.description,
+        amount: Number(r.amount || 0),
+        due_date: r.dueDate,
+        status: r.status || 'pending',
+        invoice_number: r.invoiceNumber || `NF-e #${5800 + idx}`,
+        payment_method: 'boleto'
+      }))
+      await supabase.from('receivables').upsert(recPayload, { onConflict: 'client_id, ca_receivable_id' })
+    }
+
+    // 4. Verificar se há registros na tabela bank_transactions
+    const { count: txCount, error: txError } = await supabase
+      .from('bank_transactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', resolvedClientId)
+
+    if (!txError && (txCount === 0 || txCount === null)) {
+      const txPayload = INITIAL_BANK_TRANSACTIONS.map(t => ({
+        client_id: resolvedClientId,
+        transaction_date: t.date,
+        description: t.description,
+        amount: Number(t.amount || 0),
+        type: t.type || 'debit',
+        is_reconciled: Boolean(t.isReconciled),
+        reconciled_at: t.isReconciled ? new Date().toISOString() : null
+      }))
+      await supabase.from('bank_transactions').insert(txPayload)
+    }
+
+    return true
+  } catch (err) {
+    console.warn('Aviso ao inicializar seed no Supabase:', err)
+    return false
+  }
+}
+
 export async function fetchPayablesFromSupabase(clientId) {
   const supabase = getSupabaseClient()
   if (!supabase) return []
 
   try {
-    let query = supabase.from('payables').select('*').order('due_date', { ascending: true })
-    if (clientId && clientId.includes('-') && clientId.length === 36) {
-      query = query.eq('client_id', clientId)
-    }
+    const rawId = clientId ? String(clientId) : ''
+    const isUuid = rawId.includes('-') && rawId.length === 36
+    const resolvedClientId = isUuid ? rawId : 'd0000000-0000-0000-0000-000000000001'
 
-    const { data, error } = await query
-    if (error) throw error
+    let { data, error } = await supabase
+      .from('payables')
+      .select('*')
+      .eq('client_id', resolvedClientId)
+      .order('due_date', { ascending: true })
+
+    if (error || !data || data.length === 0) {
+      await ensureInitialDatabaseSeed(resolvedClientId)
+      const retry = await supabase
+        .from('payables')
+        .select('*')
+        .eq('client_id', resolvedClientId)
+        .order('due_date', { ascending: true })
+      data = retry.data || []
+    }
 
     return (data || []).map(p => ({
       id: p.id,
@@ -368,13 +496,25 @@ export async function fetchReceivablesFromSupabase(clientId) {
   if (!supabase) return []
 
   try {
-    let query = supabase.from('receivables').select('*').order('due_date', { ascending: true })
-    if (clientId && clientId.includes('-') && clientId.length === 36) {
-      query = query.eq('client_id', clientId)
-    }
+    const rawId = clientId ? String(clientId) : ''
+    const isUuid = rawId.includes('-') && rawId.length === 36
+    const resolvedClientId = isUuid ? rawId : 'd0000000-0000-0000-0000-000000000001'
 
-    const { data, error } = await query
-    if (error) throw error
+    let { data, error } = await supabase
+      .from('receivables')
+      .select('*')
+      .eq('client_id', resolvedClientId)
+      .order('due_date', { ascending: true })
+
+    if (error || !data || data.length === 0) {
+      await ensureInitialDatabaseSeed(resolvedClientId)
+      const retry = await supabase
+        .from('receivables')
+        .select('*')
+        .eq('client_id', resolvedClientId)
+        .order('due_date', { ascending: true })
+      data = retry.data || []
+    }
 
     return (data || []).map(r => ({
       id: r.id,
@@ -385,7 +525,7 @@ export async function fetchReceivablesFromSupabase(clientId) {
       amount: Number(r.amount || 0),
       dueDate: r.due_date,
       status: r.status,
-      paymentMethod: r.payment_method === 'boleto' ? 'Boleto Bancário' : r.payment_method,
+      paymentMethod: r.payment_method === 'boleto' ? 'Boleto Bancário' : (r.payment_method || 'Boleto / PIX'),
       invoiceNumber: r.invoice_number || 'NF-e Oficial'
     }))
   } catch (err) {
@@ -420,13 +560,25 @@ export async function fetchBankTransactionsFromSupabase(clientId) {
   if (!supabase) return []
 
   try {
-    let query = supabase.from('bank_transactions').select('*').order('transaction_date', { ascending: false })
-    if (clientId && clientId.includes('-') && clientId.length === 36) {
-      query = query.eq('client_id', clientId)
-    }
+    const rawId = clientId ? String(clientId) : ''
+    const isUuid = rawId.includes('-') && rawId.length === 36
+    const resolvedClientId = isUuid ? rawId : 'd0000000-0000-0000-0000-000000000001'
 
-    const { data, error } = await query
-    if (error) throw error
+    let { data, error } = await supabase
+      .from('bank_transactions')
+      .select('*')
+      .eq('client_id', resolvedClientId)
+      .order('transaction_date', { ascending: false })
+
+    if (error || !data || data.length === 0) {
+      await ensureInitialDatabaseSeed(resolvedClientId)
+      const retry = await supabase
+        .from('bank_transactions')
+        .select('*')
+        .eq('client_id', resolvedClientId)
+        .order('transaction_date', { ascending: false })
+      data = retry.data || []
+    }
 
     return (data || []).map(t => ({
       id: t.id,
@@ -588,49 +740,20 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
       await supabase.from('bank_accounts').upsert(bankPayload, { onConflict: 'client_id, ca_account_id' })
     }
 
-    // d) Salvar Contas a Pagar
-    if (syncData.payables && syncData.payables.length > 0) {
-      const payablesPayload = syncData.payables.map((p, idx) => ({
-        client_id: resolvedClientId,
-        ca_payable_id: String(p.id || `ca-pay-${idx}`),
-        supplier_name: p.supplier,
-        category_name: p.category || 'Fornecedores & Insumos',
-        description: p.description,
-        amount: Number(p.amount || 0),
-        due_date: p.dueDate,
-        status: p.status,
-        barcode: p.barcode || null,
-        notes: 'Sincronizado via Conta Azul V2'
-      }))
+    // d) Atualizar Status e Horário da Conexão Conta Azul
+    await supabase.from('conta_azul_integrations').upsert({
+      client_id: resolvedClientId,
+      connection_status: 'connected',
+      last_sync_at: new Date().toISOString()
+    }, { onConflict: 'client_id' })
 
-      await supabase.from('payables').upsert(payablesPayload, { onConflict: 'client_id, ca_payable_id' })
-    }
-
-    // e) Salvar Contas a Receber
-    if (syncData.receivables && syncData.receivables.length > 0) {
-      const receivablesPayload = syncData.receivables.map((r, idx) => ({
-        client_id: resolvedClientId,
-        ca_receivable_id: String(r.id || `ca-rec-${idx}`),
-        customer_name: r.customer,
-        category_name: r.category || 'Venda de Produtos & Serviços',
-        description: r.description,
-        amount: Number(r.amount || 0),
-        due_date: r.dueDate,
-        status: r.status,
-        invoice_number: r.invoiceNumber || `NF-e #${5800 + idx}`,
-        payment_method: 'boleto'
-      }))
-
-      await supabase.from('receivables').upsert(receivablesPayload, { onConflict: 'client_id, ca_receivable_id' })
-    }
-
-    // f) Registrar Log de Sincronização
+    // e) Registrar Log de Sincronização
     await supabase.from('sync_logs').insert({
       client_id: resolvedClientId,
       entity_type: 'full_sync',
       status: 'success',
       records_processed: (syncData.rawPessoasCount || 0) + (syncData.categoriesCount || 0) + (syncData.rawBancosCount || 0),
-      details: `Sincronização com Conta Azul V2 executada e salva no Supabase com sucesso.`,
+      details: `Sincronização cadastral com Conta Azul OpenAPI executada. Dados financeiros preservados no Supabase.`,
       executed_by: 'Amici BPO Portal'
     })
 

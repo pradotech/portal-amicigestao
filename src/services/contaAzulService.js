@@ -437,18 +437,7 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
 
   onProgress({ step: 'mapping', message: `Estruturando financeiro de ${clientTradeName} na carteira Amici BPO...`, progress: 98 })
 
-  // Separar fornecedores e clientes pelo perfil ou tipo
-  const fornecedores = rawPessoas.filter(p => {
-    const perfis = Array.isArray(p.perfis) ? p.perfis : []
-    return perfis.includes('Fornecedor') || perfis.includes('Transportadora') || (!perfis.includes('Cliente') && perfis.length > 0)
-  })
-
-  const clientes = rawPessoas.filter(p => {
-    const perfis = Array.isArray(p.perfis) ? p.perfis : []
-    return perfis.includes('Cliente') || perfis.length === 0
-  })
-
-  // 1. Mapear Contas Bancárias Reais
+  // 1. Mapear Contas Bancárias Reais retornadas da Conta Azul
   const mappedBankAccounts = rawBancos.length > 0
     ? rawBancos.map((b, idx) => ({
         id: b.id || `ba-${clientId}-${idx}`,
@@ -459,224 +448,9 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
         accountNumber: b.numero || 'Conta Corrente PJ',
         accountType: b.tipo === 'CONTA_CORRENTE' ? 'Conta Corrente PJ' : 'Conta Digital',
         balance: 248900.00,
-        lastSync: 'Hoje via API Oficial'
+        lastSync: 'Sincronizado via Conta Azul OpenAPI'
       }))
-    : [
-        {
-          id: `ba-${clientId}-01`,
-          clientId: clientId,
-          bankName: 'Banco PJ Principal',
-          bankCode: '341',
-          agency: '0001',
-          accountNumber: '12345-6',
-          accountType: 'Conta Corrente PJ',
-          balance: 195000.00,
-          lastSync: 'Hoje via API Oficial'
-        }
-      ]
-
-  // 2. Mapear Contas a Pagar Reais (distribuídas pelo mês atual, anterior e futuro)
-  const baseFornecedores = fornecedores.length > 0 ? fornecedores : rawPessoas.slice(0, 15)
-  const mappedPayables = []
-  
-  // Setembro 2026 (Mês Atual)
-  const sepPayableDates = ['2026-09-04', '2026-09-08', '2026-09-12', '2026-09-23', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26', '2026-09-28', '2026-09-30']
-  baseFornecedores.slice(0, 10).forEach((p, idx) => {
-    const d = sepPayableDates[idx % sepPayableDates.length]
-    const categoria = rawCategorias[idx % (rawCategorias.length || 1)]?.nome || 'Fornecedores & Insumos'
-    const status = d < '2026-09-23' ? 'paid' : d === '2026-09-23' && idx % 2 === 0 ? 'overdue' : idx % 2 === 0 ? 'scheduled' : 'pending_client'
-    mappedPayables.push({
-      id: `pay-${clientId}-sep-${idx}`,
-      clientId: clientId,
-      supplier: p.nome || `Fornecedor ${idx + 1}`,
-      category: categoria,
-      description: `Fornecimento / Serviços - ${p.nome || 'Insumos'}`,
-      amount: 4200.00 + (idx * 3150.00),
-      dueDate: d,
-      status: status,
-      bankAccount: mappedBankAccounts[0]?.bankName || 'Banco Itaú Unibanco',
-      barcode: `34191.00000 00000.${idx}00000 00000.000000 0 98450000${(4200 + idx * 3150)}`,
-      approvalStatus: status === 'pending_client' ? 'pending' : 'approved',
-      hasAttachment: true
-    })
-  })
-
-  // Agosto 2026 (Mês Anterior - Pagos)
-  const augPayableDates = ['2026-08-05', '2026-08-08', '2026-08-12', '2026-08-20', '2026-08-24', '2026-08-27', '2026-08-30', '2026-08-31']
-  baseFornecedores.slice(0, 8).forEach((p, idx) => {
-    const d = augPayableDates[idx % augPayableDates.length]
-    const categoria = rawCategorias[idx % (rawCategorias.length || 1)]?.nome || 'Fornecedores & Insumos'
-    mappedPayables.push({
-      id: `pay-${clientId}-aug-${idx}`,
-      clientId: clientId,
-      supplier: p.nome || `Fornecedor ${idx + 1}`,
-      category: categoria,
-      description: `Fornecimento Mês 08/2026 - ${p.nome || 'Compra'}`,
-      amount: 3800.00 + (idx * 2900.00),
-      dueDate: d,
-      status: 'paid',
-      bankAccount: mappedBankAccounts[0]?.bankName || 'Banco Itaú Unibanco',
-      barcode: `34191.08000 00000.${idx}00000 00000.000000 0 98450000${(3800 + idx * 2900)}`,
-      approvalStatus: 'approved',
-      hasAttachment: true
-    })
-  })
-
-  // Julho 2026 (Mês -2 - Pagos)
-  const julPayableDates = ['2026-07-06', '2026-07-14', '2026-07-22', '2026-07-30', '2026-07-31']
-  baseFornecedores.slice(0, 5).forEach((p, idx) => {
-    const d = julPayableDates[idx % julPayableDates.length]
-    const categoria = rawCategorias[idx % (rawCategorias.length || 1)]?.nome || 'Fornecedores & Insumos'
-    mappedPayables.push({
-      id: `pay-${clientId}-jul-${idx}`,
-      clientId: clientId,
-      supplier: p.nome || `Fornecedor ${idx + 1}`,
-      category: categoria,
-      description: `Fornecimento Julho - ${p.nome || 'Compra'}`,
-      amount: 4500.00 + (idx * 3400.00),
-      dueDate: d,
-      status: 'paid',
-      bankAccount: mappedBankAccounts[0]?.bankName || 'Banco Itaú Unibanco',
-      barcode: `34191.07000 00000.${idx}00000 00000.000000 0 98450000${(4500 + idx * 3400)}`,
-      approvalStatus: 'approved',
-      hasAttachment: true
-    })
-  })
-
-  // Outubro 2026 (Próximo Mês - Agendados)
-  const octPayableDates = ['2026-10-06', '2026-10-14', '2026-10-25', '2026-10-30']
-  baseFornecedores.slice(0, 4).forEach((p, idx) => {
-    const d = octPayableDates[idx % octPayableDates.length]
-    const categoria = rawCategorias[idx % (rawCategorias.length || 1)]?.nome || 'Fornecedores & Insumos'
-    mappedPayables.push({
-      id: `pay-${clientId}-oct-${idx}`,
-      clientId: clientId,
-      supplier: p.nome || `Fornecedor ${idx + 1}`,
-      category: categoria,
-      description: `Programação Outubro - ${p.nome || 'Compra'}`,
-      amount: 5200.00 + (idx * 4100.00),
-      dueDate: d,
-      status: 'scheduled',
-      bankAccount: mappedBankAccounts[0]?.bankName || 'Banco Itaú Unibanco',
-      barcode: `34191.10000 00000.${idx}00000 00000.000000 0 98450000${(5200 + idx * 4100)}`,
-      approvalStatus: 'approved',
-      hasAttachment: true
-    })
-  })
-
-  // 3. Mapear Contas a Receber Reais (distribuídas pelo mês atual, anterior e futuro)
-  const baseClientes = clientes.length > 0 ? clientes : rawPessoas.slice(5, 20)
-  const mappedReceivables = []
-
-  // Setembro 2026 (Mês Atual)
-  const sepRecDates = ['2026-09-05', '2026-09-10', '2026-09-15', '2026-09-23', '2026-09-23', '2026-09-24', '2026-09-26', '2026-09-29']
-  baseClientes.slice(0, 8).forEach((p, idx) => {
-    const d = sepRecDates[idx % sepRecDates.length]
-    const status = d < '2026-09-23' || (d === '2026-09-23' && idx % 2 === 0) ? 'received' : 'pending'
-    mappedReceivables.push({
-      id: `rec-${clientId}-sep-${idx}`,
-      clientId: clientId,
-      customer: p.nome || `Cliente ${idx + 1}`,
-      category: 'Venda de Produtos & Serviços',
-      description: `Faturamento - ${p.nome || 'Contrato Drillex'}`,
-      amount: 18500.00 + (idx * 6400.00),
-      dueDate: d,
-      status: status,
-      paymentMethod: 'Boleto Bancário / PIX',
-      invoiceNumber: `NF-e #${5820 + idx}`
-    })
-  })
-
-  // Agosto 2026 (Mês Anterior - Recebidos)
-  const augRecDates = ['2026-08-05', '2026-08-12', '2026-08-18', '2026-08-22', '2026-08-28', '2026-08-30']
-  baseClientes.slice(0, 6).forEach((p, idx) => {
-    const d = augRecDates[idx % augRecDates.length]
-    mappedReceivables.push({
-      id: `rec-${clientId}-aug-${idx}`,
-      clientId: clientId,
-      customer: p.nome || `Cliente ${idx + 1}`,
-      category: 'Venda de Produtos & Serviços',
-      description: `Faturamento Mês 08/2026 - ${p.nome || 'Serviço'}`,
-      amount: 21000.00 + (idx * 5800.00),
-      dueDate: d,
-      status: 'received',
-      paymentMethod: 'Boleto Bancário',
-      invoiceNumber: `NF-e #${5780 + idx}`
-    })
-  })
-
-  // Julho 2026 (Mês -2 - Recebidos)
-  const julRecDates = ['2026-07-08', '2026-07-15', '2026-07-20', '2026-07-28', '2026-07-30']
-  baseClientes.slice(0, 5).forEach((p, idx) => {
-    const d = julRecDates[idx % julRecDates.length]
-    mappedReceivables.push({
-      id: `rec-${clientId}-jul-${idx}`,
-      clientId: clientId,
-      customer: p.nome || `Cliente ${idx + 1}`,
-      category: 'Venda de Produtos & Serviços',
-      description: `Faturamento Julho/2026 - ${p.nome || 'Serviço'}`,
-      amount: 22500.00 + (idx * 5200.00),
-      dueDate: d,
-      status: 'received',
-      paymentMethod: 'Boleto Bancário',
-      invoiceNumber: `NF-e #${5720 + idx}`
-    })
-  })
-
-  // Outubro 2026 (Próximo Mês - Pendentes)
-  const octRecDates = ['2026-10-05', '2026-10-12', '2026-10-18', '2026-10-25', '2026-10-29']
-  baseClientes.slice(0, 5).forEach((p, idx) => {
-    const d = octRecDates[idx % octRecDates.length]
-    mappedReceivables.push({
-      id: `rec-${clientId}-oct-${idx}`,
-      clientId: clientId,
-      customer: p.nome || `Cliente ${idx + 1}`,
-      category: 'Venda de Produtos & Serviços',
-      description: `Faturamento Programado Outubro - ${p.nome || 'Serviço'}`,
-      amount: 24000.00 + (idx * 7100.00),
-      dueDate: d,
-      status: 'pending',
-      paymentMethod: 'Boleto Bancário',
-      invoiceNumber: `NF-e #${5850 + idx}`
-    })
-  })
-
-  // 4. Mapear Transações para Conciliação Bancária
-  const mappedTransactions = [
-    {
-      id: `tx-${clientId}-01`,
-      clientId: clientId,
-      date: new Date().toISOString().split('T')[0],
-      description: `PIX RECEBIDO - ${mappedReceivables[0]?.customer || 'CLIENTE'}`,
-      amount: mappedReceivables[0]?.amount || 5400.00,
-      type: 'credit',
-      bank: mappedBankAccounts[0]?.bankName || 'Banco PJ',
-      isReconciled: true,
-      matchedEntity: mappedReceivables[0]?.invoiceNumber || 'NF-e Recebível'
-    },
-    {
-      id: `tx-${clientId}-02`,
-      clientId: clientId,
-      date: new Date().toISOString().split('T')[0],
-      description: `PAGTO ELETRONICO - ${mappedPayables[0]?.supplier || 'FORNECEDOR'}`,
-      amount: -(mappedPayables[0]?.amount || 1850.00),
-      type: 'debit',
-      bank: mappedBankAccounts[0]?.bankName || 'Banco PJ',
-      isReconciled: false,
-      suggestedMatch: `${mappedPayables[0]?.supplier} - ${mappedPayables[0]?.category}`
-    },
-    {
-      id: `tx-${clientId}-03`,
-      clientId: clientId,
-      date: new Date().toISOString().split('T')[0],
-      description: 'TARIFA MANUTENCAO CONTA CORRENTE PJ',
-      amount: -79.90,
-      type: 'debit',
-      bank: mappedBankAccounts[0]?.bankName || 'Banco PJ',
-      isReconciled: false,
-      suggestedMatch: 'Tarifas Bancárias e Encargos (Classificação Automática)'
-    }
-  ]
+    : []
 
   const timestamp = new Date().toISOString()
   onProgress({ step: 'done', message: `Sincronização de ${clientTradeName} concluída com sucesso!`, progress: 100, timestamp })
@@ -685,9 +459,9 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
     success: true,
     syncedAt: timestamp,
     bankAccounts: mappedBankAccounts,
-    payables: mappedPayables,
-    receivables: mappedReceivables,
-    transactions: mappedTransactions,
+    rawPessoas: rawPessoas,
+    rawCategorias: rawCategorias,
+    rawCentros: rawCentros,
     categoriesCount: rawCategorias.length,
     rawBancosCount: rawBancos.length,
     rawPessoasCount: rawPessoas.length,
