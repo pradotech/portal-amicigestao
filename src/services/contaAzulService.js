@@ -84,13 +84,50 @@ export function getContaAzulAuthHeaders(tokenOverride) {
 }
 
 /**
+ * Helper de requisição resiliente com fallback automático entre Proxy e URL Direta
+ */
+async function fetchContaAzulApi(endpoint, tokenOverride, options = {}) {
+  const headers = getContaAzulAuthHeaders(tokenOverride)
+  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  
+  const proxyUrl = `/api-contaazul${endpoint}`
+  const directUrl = `https://api-v2.contaazul.com${endpoint}`
+  
+  const primaryUrl = isDev ? proxyUrl : directUrl
+  const secondaryUrl = isDev ? directUrl : proxyUrl
+
+  try {
+    let res = await fetch(primaryUrl, {
+      ...options,
+      headers: { ...headers, ...(options.headers || {}) }
+    })
+
+    if (!res.ok && res.status === 404) {
+      res = await fetch(secondaryUrl, {
+        ...options,
+        headers: { ...headers, ...(options.headers || {}) }
+      })
+    }
+
+    return res
+  } catch (err) {
+    try {
+      return await fetch(secondaryUrl, {
+        ...options,
+        headers: { ...headers, ...(options.headers || {}) }
+      })
+    } catch {
+      throw err
+    }
+  }
+}
+
+/**
  * 1. GET /v1/conta-financeira (Contas Bancárias do Cliente)
  */
 export async function fetchContaAzulContasFinanceiras(tokenOverride) {
   try {
-    const res = await fetch(`${API_BASE}/v1/conta-financeira`, {
-      headers: getContaAzulAuthHeaders(tokenOverride)
-    })
+    const res = await fetchContaAzulApi('/v1/conta-financeira', tokenOverride)
     if (!res.ok) {
       if (res.status === 401) {
         console.warn('⚠️ Conta Azul API: Token expirado ou não autorizado (401) em /v1/conta-financeira. Usando dados do Supabase.')
@@ -110,9 +147,7 @@ export async function fetchContaAzulContasFinanceiras(tokenOverride) {
  */
 export async function fetchContaAzulCategorias(tokenOverride) {
   try {
-    const res = await fetch(`${API_BASE}/v1/categorias`, {
-      headers: getContaAzulAuthHeaders(tokenOverride)
-    })
+    const res = await fetchContaAzulApi('/v1/categorias', tokenOverride)
     if (!res.ok) {
       if (res.status === 401) {
         console.warn('⚠️ Conta Azul API: Token expirado ou não autorizado (401) em /v1/categorias. Usando dados do Supabase.')
@@ -132,9 +167,7 @@ export async function fetchContaAzulCategorias(tokenOverride) {
  */
 export async function fetchContaAzulCentrosDeCusto(pagina = 1, tamanhoPagina = 20, tokenOverride) {
   try {
-    const res = await fetch(`${API_BASE}/v1/centro-de-custo?pagina=${pagina}&tamanho_pagina=${tamanhoPagina}&filtro_rapido=TODOS`, {
-      headers: getContaAzulAuthHeaders(tokenOverride)
-    })
+    const res = await fetchContaAzulApi(`/v1/centro-de-custo?pagina=${pagina}&tamanho_pagina=${tamanhoPagina}&filtro_rapido=TODOS`, tokenOverride)
     if (!res.ok) {
       if (res.status === 401) {
         console.warn('⚠️ Conta Azul API: Token expirado ou não autorizado (401) em /v1/centro-de-custo. Usando dados do Supabase.')
@@ -154,9 +187,7 @@ export async function fetchContaAzulCentrosDeCusto(pagina = 1, tamanhoPagina = 2
  */
 export async function fetchContaAzulPessoas(tamanho = 100, tokenOverride) {
   try {
-    const res = await fetch(`${API_BASE}/v1/pessoas?tamanho_pagina=${tamanho}`, {
-      headers: getContaAzulAuthHeaders(tokenOverride)
-    })
+    const res = await fetchContaAzulApi(`/v1/pessoas?tamanho_pagina=${tamanho}`, tokenOverride)
     if (!res.ok) {
       if (res.status === 401) {
         console.warn('⚠️ Conta Azul API: Token expirado ou não autorizado (401) em /v1/pessoas. Usando dados do Supabase.')

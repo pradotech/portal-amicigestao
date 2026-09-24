@@ -1,15 +1,15 @@
 {
   "rewrites": [
     {
-      "source": "/api-contaazul/:match*",
-      "destination": "https://api-v2.contaazul.com/:match*"
+      "source": "/api-contaazul/:path*",
+      "destination": "https://api-v2.contaazul.com/:path*"
     },
     {
-      "source": "/api-ca-v1/:match*",
-      "destination": "https://api.contaazul.com/:match*"
+      "source": "/api-ca-v1/:path*",
+      "destination": "https://api.contaazul.com/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api-contaazul|api-ca-v1).*)",
       "destination": "/index.html"
     }
   ]
