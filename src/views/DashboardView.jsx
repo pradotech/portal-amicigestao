@@ -34,6 +34,8 @@ import {
 } from 'recharts'
 import { formatCurrency, formatDate } from '../utils/formatters'
 import { CASH_FLOW_CHART_DATA } from '../data/mockData'
+import { DateFilterBar } from '../components/DateFilterBar'
+import { useDateFilter } from '../hooks/useDateFilter'
 
 export function DashboardView({
   clients = [],
@@ -45,67 +47,34 @@ export function DashboardView({
 }) {
   const currentClient = clients.find(c => c.id === selectedClientId) || clients[0]
 
-  // Configuração inicial de datas (Mês Atual por padrão)
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = String(now.getMonth() + 1).padStart(2, '0')
-  const lastDayOfMonth = new Date(currentYear, now.getMonth() + 1, 0).getDate()
-
-  // Estados do Filtro de Período (Mês / Dia / Intervalo)
-  const [periodPreset, setPeriodPreset] = useState('this_month') // 'today' | '7days' | 'this_month' | 'last_month' | '90days' | 'month_select' | 'custom'
-  const [startDate, setStartDate] = useState(`${currentYear}-${currentMonth}-01`)
-  const [endDate, setEndDate] = useState(`${currentYear}-${currentMonth}-${String(lastDayOfMonth).padStart(2, '0')}`)
-  const [selectedMonthInput, setSelectedMonthInput] = useState(`${currentYear}-${currentMonth}`)
-
-  // Manipulador de Presets Rápidos
-  const handleApplyPreset = (preset) => {
-    setPeriodPreset(preset)
-    const d = new Date()
-    const y = d.getFullYear()
-    const m = d.getMonth()
-
-    if (preset === 'today') {
-      const today = d.toISOString().split('T')[0]
-      setStartDate(today)
-      setEndDate(today)
-    } else if (preset === '7days') {
-      const past7 = new Date(d.getTime() - 7 * 86400000).toISOString().split('T')[0]
-      setStartDate(past7)
-      setEndDate(d.toISOString().split('T')[0])
-    } else if (preset === 'this_month') {
-      const curM = String(m + 1).padStart(2, '0')
-      const lastDay = new Date(y, m + 1, 0).getDate()
-      setStartDate(`${y}-${curM}-01`)
-      setEndDate(`${y}-${curM}-${String(lastDay).padStart(2, '0')}`)
-      setSelectedMonthInput(`${y}-${curM}`)
-    } else if (preset === 'last_month') {
-      const prevMonthDate = new Date(y, m - 1, 1)
-      const prevY = prevMonthDate.getFullYear()
-      const prevM = String(prevMonthDate.getMonth() + 1).padStart(2, '0')
-      const lastDay = new Date(prevY, prevMonthDate.getMonth() + 1, 0).getDate()
-      setStartDate(`${prevY}-${prevM}-01`)
-      setEndDate(`${prevY}-${prevM}-${String(lastDay).padStart(2, '0')}`)
-      setSelectedMonthInput(`${prevY}-${prevM}`)
-    } else if (preset === '90days') {
-      const past90 = new Date(d.getTime() - 90 * 86400000).toISOString().split('T')[0]
-      setStartDate(past90)
-      setEndDate(d.toISOString().split('T')[0])
-    }
-  }
-
-  // Ao selecionar mês específico no input de mês
-  const handleMonthInputChange = (e) => {
-    const value = e.target.value // Formato YYYY-MM
-    if (!value) return
-    setSelectedMonthInput(value)
-    setPeriodPreset('month_select')
-    const [yStr, mStr] = value.split('-')
-    const y = parseInt(yStr, 10)
-    const m = parseInt(mStr, 10)
-    const lastDay = new Date(y, m, 0).getDate()
-    setStartDate(`${value}-01`)
-    setEndDate(`${value}-${String(lastDay).padStart(2, '0')}`)
-  }
+  // Hook centralizado de filtro por Mês / Dia / Período
+  const dateFilter = useDateFilter('this_month')
+  const {
+    viewMode,
+    setViewMode,
+    selectedYear,
+    setSelectedYear,
+    selectedMonth,
+    setSelectedMonth,
+    selectedDay,
+    setSelectedDay,
+    startDate,
+    endDate,
+    customStartDate,
+    setCustomStartDate,
+    customEndDate,
+    setCustomEndDate,
+    activePreset,
+    diffDays,
+    isSingleDay,
+    periodLabel,
+    handlePrevMonth,
+    handleNextMonth,
+    handlePrevDay,
+    handleNextDay,
+    handleApplyPreset,
+    filterByDate
+  } = dateFilter
 
   // Base de Contas a Pagar e Receber para o Cliente Atual (Drillex ou Global)
   const basePayables = selectedClientId
@@ -117,23 +86,8 @@ export function DashboardView({
     : receivables
 
   // Filtragem ESTRITA pelo Intervalo de Datas Selecionado (De ... Até ...)
-  const filteredPayables = basePayables.filter(p => {
-    if (!p.dueDate) return false
-    return p.dueDate >= startDate && p.dueDate <= endDate
-  })
-
-  const filteredReceivables = baseReceivables.filter(r => {
-    if (!r.dueDate) return false
-    return pDueDateInRange(r.dueDate, startDate, endDate)
-  })
-
-  function pDueDateInRange(dueDate, start, end) {
-    return dueDate >= start && dueDate <= end
-  }
-
-  // Cálculo de Dias do Período Selecionado
-  const diffDays = Math.max(1, Math.round((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1)
-  const isSingleDay = diffDays === 1 || startDate === endDate
+  const filteredPayables = filterByDate(basePayables, 'dueDate')
+  const filteredReceivables = filterByDate(baseReceivables, 'dueDate')
 
   // =========================================================================
   // MÉTRICAS CALCULADAS DINAMICAMENTE PARA O PERÍODO SELECIONADO
@@ -175,21 +129,7 @@ export function DashboardView({
     ? (currentClient?.pendingReconciliations || 0)
     : clients.reduce((acc, c) => acc + (c.pendingReconciliations || 0), 0)
 
-  // Descrição legível do período selecionado
-  const getPeriodLabel = () => {
-    if (periodPreset === 'today') return 'Hoje'
-    if (periodPreset === '7days') return 'Últimos 7 dias'
-    if (periodPreset === 'this_month') return 'Este Mês'
-    if (periodPreset === 'last_month') return 'Mês Anterior'
-    if (periodPreset === '90days') return 'Últimos 90 dias'
-    if (periodPreset === 'month_select') {
-      const [y, m] = selectedMonthInput.split('-')
-      const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-      const mIdx = parseInt(m, 10) - 1
-      return `${monthNames[mIdx] || m}/${y}`
-    }
-    return `${formatDate(startDate)} até ${formatDate(endDate)}`
-  }
+  const getPeriodLabel = () => periodLabel
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -226,101 +166,32 @@ export function DashboardView({
         <div className="absolute right-0 top-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
       </div>
 
-      {/* BARRA DE FILTRO DE PERÍODO (MÊS, DIA, INTERVALO DE ... ATÉ ...) */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
-        
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          
-          {/* Presets Rápidos */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-semibold text-slate-400 mr-1 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-cyan-400" />
-              <span>Período:</span>
-            </span>
-
-            {[
-              { id: 'today', label: 'Hoje' },
-              { id: '7days', label: '7 Dias' },
-              { id: 'this_month', label: 'Este Mês' },
-              { id: 'last_month', label: 'Mês Anterior' },
-              { id: '90days', label: 'Últimos 90 Dias' },
-              { id: 'custom', label: 'Personalizado' }
-            ].map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => {
-                  if (p.id === 'custom') setPeriodPreset('custom')
-                  else handleApplyPreset(p.id)
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                  periodPreset === p.id
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700/60'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Seletores Específicos: Escolher Mês e Intervalo De / Até */}
-          <div className="flex flex-wrap items-center gap-3">
-            
-            {/* Seletor Rápido de Mês */}
-            <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-              <span className="text-[11px] font-medium text-slate-400">Escolher Mês:</span>
-              <input
-                type="month"
-                value={selectedMonthInput}
-                onChange={handleMonthInputChange}
-                className="bg-transparent text-xs font-mono text-cyan-300 focus:outline-none cursor-pointer"
-              />
-            </div>
-
-            {/* Inputs De / Até */}
-            <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-              <span className="text-[11px] font-medium text-slate-400">De:</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value)
-                  setPeriodPreset('custom')
-                }}
-                className="bg-transparent text-xs font-mono text-slate-200 focus:outline-none cursor-pointer"
-              />
-              <span className="text-slate-600">•</span>
-              <span className="text-[11px] font-medium text-slate-400">Até:</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value)
-                  setPeriodPreset('custom')
-                }}
-                className="bg-transparent text-xs font-mono text-slate-200 focus:outline-none cursor-pointer"
-              />
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* Resumo do Intervalo Ativo com Feedback em Tempo Real */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60 font-mono gap-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            <span>Filtro ativo: <strong className="text-white">{getPeriodLabel()}</strong> ({diffDays} {diffDays === 1 ? 'dia' : 'dias'})</span>
-          </div>
-          <div className="flex items-center gap-3 text-[11px]">
-            <span className="text-emerald-400 font-semibold">{filteredReceivables.length} recebimentos ({formatCurrency(periodRevenue)})</span>
-            <span>•</span>
-            <span className="text-amber-400 font-semibold">{filteredPayables.length} pagamentos ({formatCurrency(totalPayablesAmount)})</span>
-          </div>
-        </div>
-
-      </div>
+      {/* BARRA DE FILTRO DE PERÍODO (POR MÊS, POR DIA, INTERVALO DE ... ATÉ ...) */}
+      <DateFilterBar
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+        onMonthChange={setSelectedMonth}
+        onYearChange={setSelectedYear}
+        onPrevMonth={handlePrevMonth}
+        onNextMonth={handleNextMonth}
+        selectedDay={selectedDay}
+        onDayChange={setSelectedDay}
+        onPrevDay={handlePrevDay}
+        onNextDay={handleNextDay}
+        startDate={customStartDate}
+        endDate={customEndDate}
+        onStartDateChange={setCustomStartDate}
+        onEndDateChange={setCustomEndDate}
+        onApplyPreset={handleApplyPreset}
+        activePreset={activePreset}
+        totalReceivablesCount={filteredReceivables.length}
+        totalReceivablesAmount={periodRevenue}
+        totalPayablesCount={filteredPayables.length}
+        totalPayablesAmount={totalPayablesAmount}
+        diffDays={diffDays}
+      />
 
       {/* Grid 1: Destaque de Faturamento (Período & Dia/Média) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

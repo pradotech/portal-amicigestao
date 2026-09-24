@@ -17,6 +17,53 @@ export function formatDate(dateString) {
   }
 }
 
+export function normalizeDate(dateString) {
+  if (!dateString) return ''
+  try {
+    const clean = String(dateString).trim()
+    if (clean.includes('/')) {
+      const parts = clean.split('/')
+      if (parts.length === 3) {
+        const [day, month, year] = parts
+        return `${year.padStart(4, '20')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+      }
+    }
+    const isoPart = clean.split('T')[0]
+    const [y, m, d] = isoPart.split('-')
+    if (y && m && d) {
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    }
+    return isoPart
+  } catch {
+    return String(dateString)
+  }
+}
+
+export function isDateInRange(dateString, startDate, endDate) {
+  if (!dateString) return false
+  const target = normalizeDate(dateString)
+  const start = normalizeDate(startDate)
+  const end = normalizeDate(endDate)
+  if (!start && !end) return true
+  if (start && !end) return target >= start
+  if (!start && end) return target <= end
+  return target >= start && target <= end
+}
+
+export const MONTH_NAMES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+]
+
+export function getMonthName(monthIndex) {
+  return MONTH_NAMES[monthIndex] || ''
+}
+
+export function formatMonthYear(year, month) {
+  const mIdx = typeof month === 'number' ? month - 1 : parseInt(month, 10) - 1
+  return `${MONTH_NAMES[mIdx] || month} de ${year}`
+}
+
 export function formatCNPJ(cnpj) {
   if (!cnpj) return ''
   const cleaned = cnpj.replace(/\D/g, '')

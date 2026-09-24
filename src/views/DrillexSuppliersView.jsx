@@ -15,12 +15,16 @@ import {
   Mail,
   Check,
   Filter,
-  FileText
+  FileText,
+  DollarSign,
+  Calendar
 } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusBadge } from '../utils/formatters'
+import { DateFilterBar } from '../components/DateFilterBar'
+import { useDateFilter } from '../hooks/useDateFilter'
 
 export function DrillexSuppliersView({
-  payables,
+  payables = [],
   rawPessoas = [],
   clientName = 'Drillex',
   onUpdatePayableStatus,
@@ -33,18 +37,49 @@ export function DrillexSuppliersView({
   const [selectedPayables, setSelectedPayables] = useState([])
   const [showBorderoModal, setShowBorderoModal] = useState(false)
 
+  // Hook centralizado de filtro de data
+  const dateFilter = useDateFilter('this_month')
+  const {
+    viewMode,
+    setViewMode,
+    selectedYear,
+    setSelectedYear,
+    selectedMonth,
+    setSelectedMonth,
+    selectedDay,
+    setSelectedDay,
+    startDate,
+    endDate,
+    customStartDate,
+    setCustomStartDate,
+    customEndDate,
+    setCustomEndDate,
+    activePreset,
+    diffDays,
+    periodLabel,
+    handlePrevMonth,
+    handleNextMonth,
+    handlePrevDay,
+    handleNextDay,
+    handleApplyPreset,
+    filterByDate
+  } = dateFilter
+
   // Filtra pessoas que são Fornecedores ou Transportadoras
   const fornecedores = rawPessoas.filter(p => {
     const perfis = Array.isArray(p.perfis) ? p.perfis : []
     return perfis.includes('Fornecedor') || perfis.includes('Transportadora') || (!perfis.includes('Cliente') && perfis.length > 0)
   })
 
-  // Filtro de Contas a Pagar
-  const filteredPayables = payables.filter(item => {
+  // 1. Filtragem Estrita por Data do Período
+  const dateFilteredPayables = filterByDate(payables, 'dueDate')
+
+  // 2. Filtragem por Status e Termo de Busca
+  const filteredPayables = dateFilteredPayables.filter(item => {
     const matchesStatus = filterStatus === 'all' ? true : item.status === filterStatus
     const matchesSearch =
-      item.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.supplier && item.supplier.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (item.barcode && item.barcode.includes(searchTerm))
     return matchesStatus && matchesSearch
   })
@@ -55,7 +90,12 @@ export function DrillexSuppliersView({
     (f.documento && f.documento.includes(searchTerm))
   )
 
-  const totalPayablesAmount = filteredPayables.reduce((acc, p) => acc + (p.amount || 0), 0)
+  // Métricas do Período Selecionado
+  const totalPayablesAmount = dateFilteredPayables.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const paidPayablesAmount = dateFilteredPayables.filter(p => p.status === 'paid').reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const scheduledPayablesAmount = dateFilteredPayables.filter(p => p.status === 'scheduled' || p.status === 'approved').reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const overduePayablesAmount = dateFilteredPayables.filter(p => p.status === 'overdue').reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+
   const selectedTotalAmount = payables
     .filter(p => selectedPayables.includes(p.id))
     .reduce((acc, p) => acc + (p.amount || 0), 0)
@@ -84,7 +124,7 @@ export function DrillexSuppliersView({
             <span>Fornecedores & Contas a Pagar ({clientName})</span>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Gestão de fornecedores reais e autorização de pagamentos de {clientName}.
+            Gestão de fornecedores reais e autorização de pagamentos de {clientName} no período de <strong>{periodLabel}</strong>.
           </p>
         </div>
 
@@ -114,7 +154,7 @@ export function DrillexSuppliersView({
           }`}
         >
           <CreditCard className="w-4 h-4 text-amber-400" />
-          <span>Contas a Pagar & Boletos ({payables.length})</span>
+          <span>Contas a Pagar do Período ({dateFilteredPayables.length})</span>
         </button>
 
         <button
@@ -130,6 +170,64 @@ export function DrillexSuppliersView({
           <span>Lista de Fornecedores ({filteredFornecedores.length})</span>
         </button>
       </div>
+
+      {/* BARRA DE FILTRO DE DATA */}
+      {activeTab === 'payables' && (
+        <DateFilterBar
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          onMonthChange={setSelectedMonth}
+          onYearChange={setSelectedYear}
+          onPrevMonth={handlePrevMonth}
+          onNextMonth={handleNextMonth}
+          selectedDay={selectedDay}
+          onDayChange={setSelectedDay}
+          onPrevDay={handlePrevDay}
+          onNextDay={handleNextDay}
+          startDate={customStartDate}
+          endDate={customEndDate}
+          onStartDateChange={setCustomStartDate}
+          onEndDateChange={setCustomEndDate}
+          onApplyPreset={handleApplyPreset}
+          activePreset={activePreset}
+          totalPayablesCount={dateFilteredPayables.length}
+          totalPayablesAmount={totalPayablesAmount}
+          totalReceivablesCount={0}
+          totalReceivablesAmount={0}
+          diffDays={diffDays}
+        />
+      )}
+
+      {/* Cards de Resumo do Período */}
+      {activeTab === 'payables' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+            <div className="text-xs text-slate-400 font-semibold mb-1">Total no Período</div>
+            <div className="text-xl font-bold text-white font-mono">{formatCurrency(totalPayablesAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredPayables.length} títulos no período</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+            <div className="text-xs text-emerald-400 font-semibold mb-1">Liquidados</div>
+            <div className="text-xl font-bold text-emerald-300 font-mono">{formatCurrency(paidPayablesAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredPayables.filter(p => p.status === 'paid').length} títulos pagos</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+            <div className="text-xs text-blue-400 font-semibold mb-1">Agendados / A Pagar</div>
+            <div className="text-xl font-bold text-blue-300 font-mono">{formatCurrency(scheduledPayablesAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredPayables.filter(p => p.status === 'scheduled' || p.status === 'approved' || p.status === 'pending_client').length} títulos a pagar</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+            <div className="text-xs text-rose-400 font-semibold mb-1">Vencidos</div>
+            <div className="text-xl font-bold text-rose-300 font-mono">{formatCurrency(overduePayablesAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredPayables.filter(p => p.status === 'overdue').length} títulos vencidos</div>
+          </div>
+        </div>
+      )}
 
       {/* Barra de Busca e Filtros */}
       <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
