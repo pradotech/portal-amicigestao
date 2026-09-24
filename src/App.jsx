@@ -13,12 +13,6 @@ import { SettingsView } from './views/SettingsView'
 import { LoginView } from './views/LoginView'
 import { RenewTokenModal } from './components/RenewTokenModal'
 import {
-  INITIAL_CLIENTS,
-  INITIAL_PAYABLES,
-  INITIAL_RECEIVABLES,
-  INITIAL_BANK_TRANSACTIONS
-} from './data/mockData'
-import {
   getSupabaseCredentials,
   saveClientToSupabase,
   fetchClientsFromSupabase,
@@ -45,80 +39,17 @@ import {
   exchangeContaAzulCodeForToken
 } from './services/contaAzulService'
 
-const DRILLEX_CLIENT = {
-  id: 'd0000000-0000-0000-0000-000000000001',
-  corporateName: 'Drillex Indústria, Comércio e Serviços Ltda',
-  tradeName: 'Drillex',
-  cnpj: '12.845.920/0001-44',
-  email: 'drilex.fin@amicigestao.com.br',
-  phone: '(11) 98765-4321',
-  segment: 'Indústria & Serviços',
-  taxRegime: 'Lucro Presumido',
-  financialAnalyst: 'Equipe Amici Gestão',
-  planTier: 'BPO Gestão Financeira',
-  monthlyFee: 4500.00,
-  status: 'active',
-  contaAzulStatus: 'connected',
-  lastSync: 'Sincronizado via Supabase & API V2',
-  monthlyRevenue: 345800.00,
-  monthlyExpense: 198200.00,
-  cashBalance: 248900.00,
-  pendingReconciliations: 2,
-  payablesToday: 3,
-  color: '#0077B6',
-  isBpoClient: true
-}
-
 export function App() {
-  // Lista de Empresas / Clientes cadastrados no BPO Amici (Hoje apenas Drillex)
-  const [clients, setClients] = useState(() => {
-    try {
-      localStorage.removeItem('amici_clients')
-      localStorage.removeItem('amici_bpo_clients_v3')
+  // Lista de Empresas / Clientes cadastrados no Supabase
+  const [clients, setClients] = useState([])
 
-      const saved = localStorage.getItem('amici_bpo_clients_v4')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const validClients = parsed.filter(c => 
-            c.id === 'd0000000-0000-0000-0000-000000000001' || c.id === 'drillex-company-3272538' || c.isBpoClient || (c.contaAzulConfig && c.contaAzulConfig.companyId)
-          )
-          if (validClients.length > 0) return validClients
-        }
-      }
-    } catch (e) {
-      console.warn('Erro ao carregar clientes do BPO:', e)
-    }
-    return [DRILLEX_CLIENT]
-  })
-
-  // Cliente selecionado atualmente (null = tela inicial de seleção de clientes)
-  const [selectedClient, setSelectedClient] = useState(() => {
-    const savedId = localStorage.getItem('amici_selected_client_id_v4')
-    if (savedId && (savedId === 'd0000000-0000-0000-0000-000000000001' || savedId === 'drillex-company-3272538')) {
-      return DRILLEX_CLIENT
-    }
-    return DRILLEX_CLIENT // Abre diretamente a Drillex por padrão
-  })
+  // Cliente selecionado atualmente
+  const [selectedClient, setSelectedClient] = useState(null)
 
   const [rawPessoas, setRawPessoas] = useState([])
-  const [payables, setPayables] = useState(() => {
-    localStorage.removeItem('amici_payables_v3')
-    const saved = localStorage.getItem('amici_payables_v4')
-    return saved ? JSON.parse(saved) : INITIAL_PAYABLES
-  })
-
-  const [receivables, setReceivables] = useState(() => {
-    localStorage.removeItem('amici_receivables_v3')
-    const saved = localStorage.getItem('amici_receivables_v4')
-    return saved ? JSON.parse(saved) : INITIAL_RECEIVABLES
-  })
-
-  const [transactions, setTransactions] = useState(() => {
-    localStorage.removeItem('amici_transactions_v3')
-    const saved = localStorage.getItem('amici_transactions_v4')
-    return saved ? JSON.parse(saved) : INITIAL_BANK_TRANSACTIONS
-  })
+  const [payables, setPayables] = useState([])
+  const [receivables, setReceivables] = useState([])
+  const [transactions, setTransactions] = useState([])
 
   const [activeTab, setActiveTab] = useState('dashboard')
   const [viewMode, setViewMode] = useState('bpo') // 'bpo' | 'client'
@@ -231,37 +162,34 @@ export function App() {
 
     if (creds.isConfigured) {
       try {
-        const targetId = clientIdOverride || selectedClient?.id || 'd0000000-0000-0000-0000-000000000001'
-
         // 1. Carregar Clientes do Supabase
         const supaClients = await fetchClientsFromSupabase()
         if (supaClients && supaClients.length > 0) {
           setClients(supaClients)
+          if (!selectedClient) {
+            const savedId = localStorage.getItem('amici_selected_client_id_v4')
+            const matched = supaClients.find(c => c.id === savedId) || supaClients[0]
+            setSelectedClient(matched)
+          }
         }
+
+        const targetId = clientIdOverride || selectedClient?.id || (supaClients && supaClients[0]?.id) || 'd0000000-0000-0000-0000-000000000001'
 
         // 2. Carregar Contas a Pagar do Supabase (Fonte Única da Verdade)
         const supaPayables = await fetchPayablesFromSupabase(targetId)
-        if (supaPayables && supaPayables.length > 0) {
-          setPayables(supaPayables)
-        }
+        setPayables(supaPayables || [])
 
         // 3. Carregar Contas a Receber do Supabase (Fonte Única da Verdade)
         const supaReceivables = await fetchReceivablesFromSupabase(targetId)
-        if (supaReceivables && supaReceivables.length > 0) {
-          setReceivables(supaReceivables)
-        }
+        setReceivables(supaReceivables || [])
 
         // 4. Carregar Transações do Supabase (Fonte Única da Verdade)
         const supaTx = await fetchBankTransactionsFromSupabase(targetId)
-        if (supaTx && supaTx.length > 0) {
-          setTransactions(supaTx)
-        }
+        setTransactions(supaTx || [])
 
         // 5. Carregar Fornecedores e Clientes do Supabase
         const supaPessoas = await fetchCounterpartiesFromSupabase(targetId)
-        if (supaPessoas && supaPessoas.length > 0) {
-          setRawPessoas(supaPessoas)
-        }
+        setRawPessoas(supaPessoas || [])
       } catch (err) {
         console.warn('Erro ao carregar dados do Supabase:', err)
       }
@@ -621,7 +549,9 @@ export function App() {
               {activeTab === 'dre' && (
                 <DreReportsView
                   clients={[selectedClient]}
-                  selectedClientId={selectedClient.id}
+                  selectedClientId={selectedClient?.id}
+                  payables={payables}
+                  receivables={receivables}
                 />
               )}
 

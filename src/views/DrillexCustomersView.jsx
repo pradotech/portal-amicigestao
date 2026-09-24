@@ -55,6 +55,13 @@ export function DrillexCustomersView({
     filterByDate
   } = dateFilter
 
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  const isReceived = (r) => r.status === 'received' || r.status === 'paid' || r.status === 'liquidated' || r.status === 'RECEBIDO'
+  const isOverdue = (r) => !isReceived(r) && r.dueDate && r.dueDate < todayStr
+  const isToday = (r) => !isReceived(r) && r.dueDate && r.dueDate === todayStr
+  const isFuture = (r) => !isReceived(r) && r.dueDate && r.dueDate > todayStr
+
   // Filtra pessoas que são Clientes
   const clientes = rawPessoas.filter(p => {
     const perfis = Array.isArray(p.perfis) ? p.perfis : []
@@ -66,7 +73,19 @@ export function DrillexCustomersView({
 
   // 2. Filtragem por Status e Termo de Busca
   const filteredReceivables = dateFilteredReceivables.filter(item => {
-    const matchesStatus = filterStatus === 'all' ? true : item.status === filterStatus
+    let matchesStatus = true
+    if (filterStatus === 'received') {
+      matchesStatus = isReceived(item)
+    } else if (filterStatus === 'overdue') {
+      matchesStatus = isOverdue(item)
+    } else if (filterStatus === 'today') {
+      matchesStatus = isToday(item)
+    } else if (filterStatus === 'future') {
+      matchesStatus = isFuture(item)
+    } else if (filterStatus === 'pending') {
+      matchesStatus = !isReceived(item)
+    }
+
     const matchesSearch =
       (item.customer && item.customer.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -80,12 +99,20 @@ export function DrillexCustomersView({
     (c.documento && c.documento.includes(searchTerm))
   )
 
-  // Métricas do Período
-  const totalAmount = dateFilteredReceivables.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
-  const receivedAmount = dateFilteredReceivables.filter(r => r.status === 'received' || r.status === 'paid').reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
-  const pendingAmount = dateFilteredReceivables.filter(r => r.status !== 'received' && r.status !== 'paid').reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
-  const receivedCount = dateFilteredReceivables.filter(r => r.status === 'received' || r.status === 'paid').length
-  const pendingCount = dateFilteredReceivables.filter(r => r.status !== 'received' && r.status !== 'paid').length
+  // Métricas dos 5 Cards da Conta Azul (Calculados 100% dos registros reais do banco)
+  const vencidosList = dateFilteredReceivables.filter(r => isOverdue(r))
+  const vencidosAmount = vencidosList.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+
+  const vencemHojeList = dateFilteredReceivables.filter(r => isToday(r))
+  const vencemHojeAmount = vencemHojeList.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+
+  const aVencerList = dateFilteredReceivables.filter(r => isFuture(r))
+  const aVencerAmount = aVencerList.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+
+  const recebidosList = dateFilteredReceivables.filter(r => isReceived(r))
+  const recebidosAmount = recebidosList.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+
+  const totalPeriodoAmount = dateFilteredReceivables.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -154,32 +181,84 @@ export function DrillexCustomersView({
           onApplyPreset={handleApplyPreset}
           activePreset={activePreset}
           totalReceivablesCount={dateFilteredReceivables.length}
-          totalReceivablesAmount={totalAmount}
+          totalReceivablesAmount={totalPeriodoAmount}
           totalPayablesCount={0}
           totalPayablesAmount={0}
           diffDays={diffDays}
         />
       )}
 
-      {/* Cards de Resumo do Faturamento no Período */}
+      {/* 5 CARDS OFICIAIS DO PADRÃO CONTA AZUL (Vencidos, Vencem hoje, A vencer, Recebidos, Total do período) */}
       {activeTab === 'receivables' && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="text-xs text-slate-400 font-semibold mb-1">Total Faturado no Período</div>
-            <div className="text-xl font-bold text-white font-mono">{formatCurrency(totalAmount)}</div>
-            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredReceivables.length} títulos no período</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          {/* Card 1: Vencidos */}
+          <div
+            onClick={() => setFilterStatus(filterStatus === 'overdue' ? 'all' : 'overdue')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              filterStatus === 'overdue'
+                ? 'bg-rose-950/40 border-rose-500 ring-2 ring-rose-500/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-rose-500/50'
+            }`}
+          >
+            <div className="text-xs text-rose-400 font-semibold mb-1">Vencidos</div>
+            <div className="text-lg sm:text-xl font-bold text-rose-300 font-mono">{formatCurrency(vencidosAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{vencidosList.length} títulos</div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="text-xs text-emerald-400 font-semibold mb-1">Total Liquidado / Recebido</div>
-            <div className="text-xl font-bold text-emerald-300 font-mono">{formatCurrency(receivedAmount)}</div>
-            <div className="text-[11px] text-slate-500 mt-1">{receivedCount} títulos liquidados</div>
+          {/* Card 2: Vencem hoje */}
+          <div
+            onClick={() => setFilterStatus(filterStatus === 'today' ? 'all' : 'today')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              filterStatus === 'today'
+                ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-amber-500/50'
+            }`}
+          >
+            <div className="text-xs text-amber-400 font-semibold mb-1">Vencem hoje</div>
+            <div className="text-lg sm:text-xl font-bold text-amber-300 font-mono">{formatCurrency(vencemHojeAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{vencemHojeList.length} títulos</div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="text-xs text-amber-400 font-semibold mb-1">Pendente de Recebimento</div>
-            <div className="text-xl font-bold text-amber-300 font-mono">{formatCurrency(pendingAmount)}</div>
-            <div className="text-[11px] text-slate-500 mt-1">{pendingCount} títulos em aberto</div>
+          {/* Card 3: A vencer */}
+          <div
+            onClick={() => setFilterStatus(filterStatus === 'future' ? 'all' : 'future')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              filterStatus === 'future'
+                ? 'bg-cyan-950/40 border-cyan-500 ring-2 ring-cyan-500/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-cyan-500/50'
+            }`}
+          >
+            <div className="text-xs text-cyan-400 font-semibold mb-1">A vencer</div>
+            <div className="text-lg sm:text-xl font-bold text-cyan-300 font-mono">{formatCurrency(aVencerAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{aVencerList.length} títulos</div>
+          </div>
+
+          {/* Card 4: Recebidos */}
+          <div
+            onClick={() => setFilterStatus(filterStatus === 'received' ? 'all' : 'received')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              filterStatus === 'received'
+                ? 'bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-emerald-500/50'
+            }`}
+          >
+            <div className="text-xs text-emerald-400 font-semibold mb-1">Recebidos</div>
+            <div className="text-lg sm:text-xl font-bold text-emerald-300 font-mono">{formatCurrency(recebidosAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{recebidosList.length} títulos</div>
+          </div>
+
+          {/* Card 5: Total do período */}
+          <div
+            onClick={() => setFilterStatus('all')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer col-span-2 sm:col-span-1 ${
+              filterStatus === 'all'
+                ? 'bg-slate-800/80 border-slate-600 ring-2 ring-slate-600/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+            }`}
+          >
+            <div className="text-xs text-slate-400 font-semibold mb-1">Total do período</div>
+            <div className="text-lg sm:text-xl font-bold text-white font-mono">{formatCurrency(totalPeriodoAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredReceivables.length} títulos</div>
           </div>
         </div>
       )}
@@ -198,10 +277,12 @@ export function DrillexCustomersView({
         </div>
 
         {activeTab === 'receivables' && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {[
               { id: 'all', label: 'Todos' },
-              { id: 'pending', label: 'Pendentes' },
+              { id: 'overdue', label: 'Vencidos' },
+              { id: 'today', label: 'Vencem Hoje' },
+              { id: 'future', label: 'A Vencer' },
               { id: 'received', label: 'Recebidos' }
             ].map(tab => (
               <button

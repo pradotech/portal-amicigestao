@@ -33,7 +33,6 @@ import {
   Legend
 } from 'recharts'
 import { formatCurrency, formatDate } from '../utils/formatters'
-import { CASH_FLOW_CHART_DATA } from '../data/mockData'
 import { DateFilterBar } from '../components/DateFilterBar'
 import { useDateFilter } from '../hooks/useDateFilter'
 
@@ -120,14 +119,41 @@ export function DashboardView({
   // Resultado Operacional Líquido no Período (Receitas - Despesas do Período)
   const netCashFlowPeriod = periodRevenue - totalPayablesAmount
 
-  // Saldo em Caixa Base da Empresa
+  // Saldo em Caixa Calculado
   const baseCashBalance = selectedClientId
-    ? (currentClient?.cashBalance || 248900.00)
+    ? (currentClient?.cashBalance || 0)
     : clients.reduce((acc, c) => acc + (c.cashBalance || 0), 0)
 
   const totalPendingReconciliations = selectedClientId
     ? (currentClient?.pendingReconciliations || 0)
     : clients.reduce((acc, c) => acc + (c.pendingReconciliations || 0), 0)
+
+  // Gráfico de Fluxo de Caixa Dinâmico baseado exclusivamente nos lançamentos reais do banco
+  const chartData = React.useMemo(() => {
+    const dateMap = {}
+
+    filteredReceivables.forEach(r => {
+      const d = r.dueDate || r.due_date
+      if (!d) return
+      if (!dateMap[d]) dateMap[d] = { month: formatDate(d), fullDate: d, entradas: 0, saidas: 0 }
+      dateMap[d].entradas += Number(r.amount) || 0
+    })
+
+    filteredPayables.forEach(p => {
+      const d = p.dueDate || p.due_date
+      if (!d) return
+      if (!dateMap[d]) dateMap[d] = { month: formatDate(d), fullDate: d, entradas: 0, saidas: 0 }
+      dateMap[d].saidas += Number(p.amount) || 0
+    })
+
+    const sorted = Object.values(dateMap).sort((a, b) => (a.fullDate || '').localeCompare(b.fullDate || ''))
+    if (sorted.length > 0) return sorted
+
+    return [
+      { month: 'Início', entradas: 0, saidas: 0 },
+      { month: 'Fim', entradas: 0, saidas: 0 }
+    ]
+  }, [filteredReceivables, filteredPayables])
 
   const getPeriodLabel = () => periodLabel
 
@@ -389,7 +415,7 @@ export function DashboardView({
 
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={CASH_FLOW_CHART_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorEntradas" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#0077B6" stopOpacity={0.4}/>

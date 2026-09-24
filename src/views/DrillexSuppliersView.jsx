@@ -65,6 +65,13 @@ export function DrillexSuppliersView({
     filterByDate
   } = dateFilter
 
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  const isPaid = (p) => p.status === 'paid' || p.status === 'liquidated' || p.status === 'PAGO'
+  const isOverdue = (p) => !isPaid(p) && (p.status === 'overdue' || (p.dueDate && p.dueDate < todayStr))
+  const isToday = (p) => !isPaid(p) && p.dueDate && p.dueDate === todayStr
+  const isFuture = (p) => !isPaid(p) && p.dueDate && p.dueDate > todayStr
+
   // Filtra pessoas que são Fornecedores ou Transportadoras
   const fornecedores = rawPessoas.filter(p => {
     const perfis = Array.isArray(p.perfis) ? p.perfis : []
@@ -76,7 +83,19 @@ export function DrillexSuppliersView({
 
   // 2. Filtragem por Status e Termo de Busca
   const filteredPayables = dateFilteredPayables.filter(item => {
-    const matchesStatus = filterStatus === 'all' ? true : item.status === filterStatus
+    let matchesStatus = true
+    if (filterStatus === 'paid') {
+      matchesStatus = isPaid(item)
+    } else if (filterStatus === 'overdue') {
+      matchesStatus = isOverdue(item)
+    } else if (filterStatus === 'today') {
+      matchesStatus = isToday(item)
+    } else if (filterStatus === 'future' || filterStatus === 'scheduled') {
+      matchesStatus = isFuture(item) || item.status === 'scheduled' || item.status === 'approved'
+    } else if (filterStatus === 'pending_client') {
+      matchesStatus = item.status === 'pending_client'
+    }
+
     const matchesSearch =
       (item.supplier && item.supplier.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -90,11 +109,20 @@ export function DrillexSuppliersView({
     (f.documento && f.documento.includes(searchTerm))
   )
 
-  // Métricas do Período Selecionado
-  const totalPayablesAmount = dateFilteredPayables.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
-  const paidPayablesAmount = dateFilteredPayables.filter(p => p.status === 'paid').reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
-  const scheduledPayablesAmount = dateFilteredPayables.filter(p => p.status === 'scheduled' || p.status === 'approved').reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
-  const overduePayablesAmount = dateFilteredPayables.filter(p => p.status === 'overdue').reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  // Métricas dos 5 Cards da Conta Azul (Calculados 100% dos registros reais do banco)
+  const vencidosList = dateFilteredPayables.filter(p => isOverdue(p))
+  const vencidosAmount = vencidosList.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+
+  const vencemHojeList = dateFilteredPayables.filter(p => isToday(p))
+  const vencemHojeAmount = vencemHojeList.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+
+  const aVencerList = dateFilteredPayables.filter(p => isFuture(p))
+  const aVencerAmount = aVencerList.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+
+  const pagosList = dateFilteredPayables.filter(p => isPaid(p))
+  const pagosAmount = pagosList.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+
+  const totalPeriodoAmount = dateFilteredPayables.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
 
   const selectedTotalAmount = payables
     .filter(p => selectedPayables.includes(p.id))
@@ -193,38 +221,84 @@ export function DrillexSuppliersView({
           onApplyPreset={handleApplyPreset}
           activePreset={activePreset}
           totalPayablesCount={dateFilteredPayables.length}
-          totalPayablesAmount={totalPayablesAmount}
+          totalPayablesAmount={totalPeriodoAmount}
           totalReceivablesCount={0}
           totalReceivablesAmount={0}
           diffDays={diffDays}
         />
       )}
 
-      {/* Cards de Resumo do Período */}
+      {/* 5 CARDS OFICIAIS DO PADRÃO CONTA AZUL (Vencidos, Vencem hoje, A vencer, Pagos, Total do período) */}
       {activeTab === 'payables' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="text-xs text-slate-400 font-semibold mb-1">Total no Período</div>
-            <div className="text-xl font-bold text-white font-mono">{formatCurrency(totalPayablesAmount)}</div>
-            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredPayables.length} títulos no período</div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="text-xs text-emerald-400 font-semibold mb-1">Liquidados</div>
-            <div className="text-xl font-bold text-emerald-300 font-mono">{formatCurrency(paidPayablesAmount)}</div>
-            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredPayables.filter(p => p.status === 'paid').length} títulos pagos</div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="text-xs text-blue-400 font-semibold mb-1">Agendados / A Pagar</div>
-            <div className="text-xl font-bold text-blue-300 font-mono">{formatCurrency(scheduledPayablesAmount)}</div>
-            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredPayables.filter(p => p.status === 'scheduled' || p.status === 'approved' || p.status === 'pending_client').length} títulos a pagar</div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          {/* Card 1: Vencidos */}
+          <div
+            onClick={() => setFilterStatus(filterStatus === 'overdue' ? 'all' : 'overdue')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              filterStatus === 'overdue'
+                ? 'bg-rose-950/40 border-rose-500 ring-2 ring-rose-500/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-rose-500/50'
+            }`}
+          >
             <div className="text-xs text-rose-400 font-semibold mb-1">Vencidos</div>
-            <div className="text-xl font-bold text-rose-300 font-mono">{formatCurrency(overduePayablesAmount)}</div>
-            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredPayables.filter(p => p.status === 'overdue').length} títulos vencidos</div>
+            <div className="text-lg sm:text-xl font-bold text-rose-300 font-mono">{formatCurrency(vencidosAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{vencidosList.length} títulos</div>
+          </div>
+
+          {/* Card 2: Vencem hoje */}
+          <div
+            onClick={() => setFilterStatus(filterStatus === 'today' ? 'all' : 'today')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              filterStatus === 'today'
+                ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-amber-500/50'
+            }`}
+          >
+            <div className="text-xs text-amber-400 font-semibold mb-1">Vencem hoje</div>
+            <div className="text-lg sm:text-xl font-bold text-amber-300 font-mono">{formatCurrency(vencemHojeAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{vencemHojeList.length} títulos</div>
+          </div>
+
+          {/* Card 3: A vencer */}
+          <div
+            onClick={() => setFilterStatus(filterStatus === 'scheduled' ? 'all' : 'scheduled')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              filterStatus === 'scheduled'
+                ? 'bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-blue-500/50'
+            }`}
+          >
+            <div className="text-xs text-blue-400 font-semibold mb-1">A vencer / Agendados</div>
+            <div className="text-lg sm:text-xl font-bold text-blue-300 font-mono">{formatCurrency(aVencerAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{aVencerList.length} títulos</div>
+          </div>
+
+          {/* Card 4: Pagos */}
+          <div
+            onClick={() => setFilterStatus(filterStatus === 'paid' ? 'all' : 'paid')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              filterStatus === 'paid'
+                ? 'bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-emerald-500/50'
+            }`}
+          >
+            <div className="text-xs text-emerald-400 font-semibold mb-1">Pagos / Liquidados</div>
+            <div className="text-lg sm:text-xl font-bold text-emerald-300 font-mono">{formatCurrency(pagosAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{pagosList.length} títulos</div>
+          </div>
+
+          {/* Card 5: Total do período */}
+          <div
+            onClick={() => setFilterStatus('all')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer col-span-2 sm:col-span-1 ${
+              filterStatus === 'all'
+                ? 'bg-slate-800/80 border-slate-600 ring-2 ring-slate-600/20'
+                : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+            }`}
+          >
+            <div className="text-xs text-slate-400 font-semibold mb-1">Total do período</div>
+            <div className="text-lg sm:text-xl font-bold text-white font-mono">{formatCurrency(totalPeriodoAmount)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{dateFilteredPayables.length} títulos</div>
           </div>
         </div>
       )}
@@ -243,12 +317,14 @@ export function DrillexSuppliersView({
         </div>
 
         {activeTab === 'payables' && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {[
               { id: 'all', label: 'Todos' },
-              { id: 'scheduled', label: 'Agendados' },
+              { id: 'overdue', label: 'Vencidos' },
+              { id: 'today', label: 'Vencem Hoje' },
+              { id: 'scheduled', label: 'A Vencer' },
               { id: 'pending_client', label: 'Aguardando Aprovação' },
-              { id: 'overdue', label: 'Vencidos' }
+              { id: 'paid', label: 'Pagos' }
             ].map(tab => (
               <button
                 key={tab.id}
