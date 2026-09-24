@@ -495,47 +495,147 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
     : []
 
   // 2. Mapear Vendas e Contas a Receber Reais da Conta Azul
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  function extractDate(val) {
+    if (!val) return null
+    try {
+      const s = String(val).trim()
+      if (s.includes('T')) return s.split('T')[0]
+      if (s.includes(' ')) return s.split(' ')[0]
+      if (s.includes('/')) {
+        const parts = s.split('/')
+        if (parts.length === 3 && parts[2].length === 4) {
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+        }
+      }
+      const match = s.match(/\d{4}-\d{2}-\d{2}/)
+      if (match) return match[0]
+    } catch {
+      return null
+    }
+    return null
+  }
+
   const mappedReceivables = []
   if (rawVendas && rawVendas.length > 0) {
     rawVendas.forEach(v => {
-      const customerName = v.cliente?.nome || v.cliente?.razao_social || v.cliente_nome || 'Cliente Conta Azul'
-      const parcelas = Array.isArray(v.parcelas) && v.parcelas.length > 0
-        ? v.parcelas
-        : [{
-            id: v.id,
-            numero: 1,
-            data_vencimento: v.data_vencimento || v.data_emissao,
-            valor: v.total || v.valor || 0,
-            status: v.status
-          }]
+      const customerName = v.cliente?.nome || v.cliente?.razao_social || v.cliente_nome || v.contato?.nome || 'Cliente Conta Azul'
+      const saleDate =
+        extractDate(v.data_venda) ||
+        extractDate(v.data_emissao) ||
+        extractDate(v.data) ||
+        extractDate(v.data_criacao) ||
+        extractDate(v.data_compromisso) ||
+        extractDate(v.previsao_faturamento) ||
+        extractDate(v.data_faturamento) ||
+        extractDate(v.created_at)
 
-      parcelas.forEach((p, idx) => {
-        const rawStatus = String(p.status || v.status || '').toUpperCase()
-        let mappedStatus = 'pending'
-        if (rawStatus === 'RECEBIDO' || rawStatus === 'QUITADO' || rawStatus === 'ACQUITTED' || rawStatus === 'PAGO') {
-          mappedStatus = 'received'
-        } else if (rawStatus === 'CANCELADO' || rawStatus === 'CANCELLED') {
-          mappedStatus = 'cancelled'
+      const totalAmount = Number(v.total || v.valor || v.valor_total || v.valor_liquido || 0)
+      const saleStatusRaw = String(
+        (v.situacao && (v.situacao.nome || v.situacao.descricao || v.situacao)) ||
+        v.status ||
+        v.situacao_venda ||
+        ''
+      ).toUpperCase()
+
+      const isCancelled = saleStatusRaw.includes('CANCELAD') || saleStatusRaw.includes('PERDID')
+      const saleHasReceipt =
+        saleStatusRaw.includes('RECEBID') ||
+        saleStatusRaw.includes('QUITAD') ||
+        saleStatusRaw.includes('ACQUITTED') ||
+        saleStatusRaw.includes('PAGO') ||
+        saleStatusRaw.includes('CONCRETIZAD') ||
+        saleStatusRaw.includes('FATURAD')
+
+      const rawParcelas = (v.condicao_pagamento && Array.isArray(v.condicao_pagamento.parcelas) && v.condicao_pagamento.parcelas.length > 0)
+        ? v.condicao_pagamento.parcelas
+        : (Array.isArray(v.parcelas) && v.parcelas.length > 0)
+        ? v.parcelas
+        : (Array.isArray(v.parcelas_financeiras) && v.parcelas_financeiras.length > 0)
+        ? v.parcelas_financeiras
+        : null
+
+      if (rawParcelas && rawParcelas.length > 0) {
+        rawParcelas.forEach((p, idx) => {
+          const pDate =
+            extractDate(p.data_vencimento) ||
+            extractDate(p.vencimento) ||
+            extractDate(p.due_date) ||
+            extractDate(p.data_previsao) ||
+            extractDate(p.data_pagamento) ||
+            extractDate(p.data_recebimento) ||
+            saleDate ||
+            todayStr
+
+          const pAmount = Number(p.valor || p.total || p.valor_parcela || (totalAmount / rawParcelas.length) || 0)
+          const pStatusRaw = String(
+            (p.situacao && (p.situacao.nome || p.situacao)) ||
+            p.status ||
+            p.situacao_parcela ||
+            ''
+          ).toUpperCase()
+
+          const pIsReceived =
+            pStatusRaw.includes('RECEBID') ||
+            pStatusRaw.includes('QUITAD') ||
+            pStatusRaw.includes('ACQUITTED') ||
+            pStatusRaw.includes('PAGO') ||
+            pStatusRaw.includes('LIQUIDADO') ||
+            Boolean(p.data_recebimento || p.data_pagamento || p.recebido || p.quitado)
+
+          let finalStatus = 'pending'
+          if (pIsReceived) {
+            finalStatus = 'received'
+          } else if (isCancelled) {
+            finalStatus = 'cancelled'
+          } else if (pDate && pDate < todayStr) {
+            finalStatus = 'overdue'
+          } else {
+            finalStatus = 'pending'
+          }
+
+          mappedReceivables.push({
+            id: p.id || `rec-${v.id}-${idx + 1}`,
+            caReceivableId: String(p.id || v.id),
+            clientId: clientId,
+            customer: customerName,
+            category: 'Venda de Produtos & Serviços',
+            description: `Venda ${v.numero || ''} - ${customerName}`.trim(),
+            amount: pAmount,
+            dueDate: pDate,
+            status: finalStatus,
+            paymentMethod: 'Boleto Bancário',
+            invoiceNumber: v.numero ? `Venda #${v.numero}` : 'Venda Conta Azul'
+          })
+        })
+      } else {
+        const finalDueDate = saleDate || todayStr
+        let finalStatus = 'pending'
+        if (saleHasReceipt) {
+          finalStatus = 'received'
+        } else if (isCancelled) {
+          finalStatus = 'cancelled'
+        } else if (finalDueDate < todayStr) {
+          finalStatus = 'overdue'
         } else {
-          mappedStatus = 'pending'
+          finalStatus = 'pending'
         }
 
-        const due = (p.data_vencimento || p.vencimento || v.data_emissao || '').split('T')[0]
-
         mappedReceivables.push({
-          id: p.id || `rec-${v.id}-${idx + 1}`,
-          caReceivableId: String(p.id || v.id),
+          id: `rec-${v.id || Math.random()}`,
+          caReceivableId: String(v.id || Math.random()),
           clientId: clientId,
           customer: customerName,
           category: 'Venda de Produtos & Serviços',
           description: `Venda ${v.numero || ''} - ${customerName}`.trim(),
-          amount: Number(p.valor || p.total || v.total || v.valor || 0),
-          dueDate: due || new Date().toISOString().split('T')[0],
-          status: mappedStatus,
+          amount: totalAmount,
+          dueDate: finalDueDate,
+          status: finalStatus,
           paymentMethod: 'Boleto Bancário',
           invoiceNumber: v.numero ? `Venda #${v.numero}` : 'Venda Conta Azul'
         })
-      })
+      }
     })
   }
 
