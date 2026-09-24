@@ -14,11 +14,14 @@ const DEFAULT_REDIRECT_URI = 'https://portal-amicigestao.vercel.app/oauth/conta-
 const API_BASE = '/api-contaazul'
 
 export function getContaAzulGlobalConfig() {
-  const dynamicOriginUri = typeof window !== 'undefined' ? `${window.location.origin}/oauth/conta-azul/callback` : DEFAULT_REDIRECT_URI
+  const customSavedUri = localStorage.getItem('amici_ca_redirect_uri')
+  // Garante o uso da URL oficial cadastrada no portal da Conta Azul (evita que localhost cause erro de validação)
+  const validRedirectUri = (customSavedUri && !customSavedUri.includes('localhost')) ? customSavedUri : DEFAULT_REDIRECT_URI
+
   return {
     clientId: localStorage.getItem('amici_ca_client_id') || import.meta.env.VITE_CONTA_AZUL_CLIENT_ID || DEFAULT_CLIENT_ID,
     clientSecret: localStorage.getItem('amici_ca_client_secret') || import.meta.env.VITE_CONTA_AZUL_CLIENT_SECRET || DEFAULT_CLIENT_SECRET,
-    redirectUri: localStorage.getItem('amici_ca_redirect_uri') || import.meta.env.VITE_CONTA_AZUL_REDIRECT_URI || dynamicOriginUri,
+    redirectUri: validRedirectUri,
     accessToken: localStorage.getItem('amici_ca_access_token') || import.meta.env.VITE_CONTA_AZUL_ACCESS_TOKEN || '',
     refreshToken: localStorage.getItem('amici_ca_refresh_token') || import.meta.env.VITE_CONTA_AZUL_REFRESH_TOKEN || '',
     companyId: localStorage.getItem('amici_ca_company_id') || import.meta.env.VITE_CONTA_AZUL_COMPANY_ID || DEFAULT_COMPANY_ID,
@@ -668,11 +671,11 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
 export function buildContaAzulAuthUrl(clientIdOverride, stateParam) {
   const config = getContaAzulGlobalConfig()
   const clientId = clientIdOverride || config.clientId || DEFAULT_CLIENT_ID
-  const rawRedirectUri = config.redirectUri || (typeof window !== 'undefined' ? `${window.location.origin}/oauth/conta-azul/callback` : DEFAULT_REDIRECT_URI)
+  const rawRedirectUri = config.redirectUri || DEFAULT_REDIRECT_URI
   const redirectUri = encodeURIComponent(rawRedirectUri)
   const state = encodeURIComponent(stateParam || config.state || 'amici_bpo_auth')
 
-  // URL Oficial fornecida diretamente no painel de desenvolvedores da Conta Azul
+  // URL Oficial gerada diretamente pelo portal de desenvolvedores da Conta Azul
   return `https://login.contaazul.com/#/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}`
 }
 
