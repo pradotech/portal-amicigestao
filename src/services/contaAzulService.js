@@ -88,10 +88,10 @@ export function getContaAzulAuthHeaders(tokenOverride) {
 }
 
 /**
- * Helper de requisição resiliente com fallback automático entre Proxy e URL Direta
+ * Helper de requisição resiliente com renovação automática (Auto-Refresh) e fallback de endpoints
  */
 async function fetchContaAzulApi(endpoint, tokenOverride, options = {}) {
-  const headers = getContaAzulAuthHeaders(tokenOverride)
+  let headers = getContaAzulAuthHeaders(tokenOverride)
   const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   
   const proxyUrl = `/api-contaazul${endpoint}`
@@ -111,6 +111,25 @@ async function fetchContaAzulApi(endpoint, tokenOverride, options = {}) {
         ...options,
         headers: { ...headers, ...(options.headers || {}) }
       })
+    }
+
+    // Se retornar 401 (token expirado), tenta renovar automaticamente em segundo plano e repete a chamada
+    if (!res.ok && res.status === 401) {
+      console.log('🔄 Token expirou (401). Renovando automaticamente via Refresh Token...')
+      const refreshed = await refreshContaAzulAccessToken()
+      if (refreshed.success && refreshed.accessToken) {
+        headers = getContaAzulAuthHeaders(refreshed.accessToken)
+        res = await fetch(primaryUrl, {
+          ...options,
+          headers: { ...headers, ...(options.headers || {}) }
+        })
+        if (!res.ok && res.status === 404) {
+          res = await fetch(secondaryUrl, {
+            ...options,
+            headers: { ...headers, ...(options.headers || {}) }
+          })
+        }
+      }
     }
 
     return res
