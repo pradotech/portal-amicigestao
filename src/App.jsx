@@ -130,6 +130,7 @@ export function App() {
   // Status Supabase & Usuário Conectado
   const [supabaseConfigured, setSupabaseConfigured] = useState(false)
   const [showRenewModal, setShowRenewModal] = useState(false)
+  const [tokenVersion, setTokenVersion] = useState(0)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('amici_user_session')
@@ -138,6 +139,8 @@ export function App() {
       return null
     }
   })
+
+  // Reavalia as credenciais da Conta Azul a cada atualização de token
   const tokenConfig = getContaAzulGlobalConfig()
   const tokenInfo = getTokenExpirationInfo()
 
@@ -405,14 +408,25 @@ export function App() {
   // ===========================================================================
   if (!selectedClient) {
     return (
-      <LandingCompanySelectView
-        clients={clients}
-        onSelectClient={handleSelectClient}
-        onAddClient={handleAddClient}
-        isSyncing={isSyncing}
-        activeTokenConfig={tokenConfig}
-        onLogout={handleLogout}
-      />
+      <>
+        <LandingCompanySelectView
+          clients={clients}
+          onSelectClient={handleSelectClient}
+          onAddClient={handleAddClient}
+          isSyncing={isSyncing}
+          activeTokenConfig={tokenConfig}
+          onLogout={handleLogout}
+        />
+        <RenewTokenModal
+          isOpen={showRenewModal}
+          onClose={() => setShowRenewModal(false)}
+          onTokenUpdated={(newToken) => {
+            setTokenVersion(v => v + 1)
+            setSyncToast('Sessão da Conta Azul renovada com sucesso!')
+          }}
+          currentClientName="Drillex"
+        />
+      </>
     )
   }
 
@@ -610,6 +624,20 @@ export function App() {
 
         </main>
       </div>
+
+      {/* Modal Global de Renovação de Token da Conta Azul */}
+      <RenewTokenModal
+        isOpen={showRenewModal}
+        onClose={() => setShowRenewModal(false)}
+        onTokenUpdated={(newToken) => {
+          setTokenVersion(v => v + 1)
+          setSyncToast('Sessão da Conta Azul renovada com sucesso! Atualizando dados...')
+          setTimeout(() => {
+            handleSyncApi()
+          }, 500)
+        }}
+        currentClientName={selectedClient?.tradeName || 'Drillex'}
+      />
 
     </div>
   )
