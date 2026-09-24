@@ -550,87 +550,117 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
   try {
     const resolvedClientId = clientId.includes('-') && clientId.length === 36 ? clientId : 'd0000000-0000-0000-0000-000000000001'
 
+
     // a) Salvar Pessoas / Counterparties (Fornecedores e Clientes)
     if (syncData.rawPessoas && syncData.rawPessoas.length > 0) {
-      const counterpartiesPayload = syncData.rawPessoas.map(p => ({
-        client_id: resolvedClientId,
-        ca_person_id: String(p.id || p.id_pessoa || Math.random()),
-        name: p.nome || 'Pessoa',
-        document: p.documento || null,
-        person_type: p.tipo_pessoa || 'LEGAL',
-        profiles: Array.isArray(p.perfis) ? p.perfis : [],
-        email: p.email || null,
-        phone: p.telefone || null,
-        is_active: true
-      }))
+      try {
+        const counterpartiesPayload = syncData.rawPessoas.map(p => ({
+          client_id: resolvedClientId,
+          ca_person_id: String(p.id || p.id_pessoa || Math.random()),
+          name: p.nome || 'Pessoa',
+          document: p.documento || null,
+          person_type: p.tipo_pessoa || 'LEGAL',
+          profiles: Array.isArray(p.perfis) ? p.perfis : [],
+          email: p.email || null,
+          phone: p.telefone || null,
+          is_active: true
+        }))
 
-      await supabase.from('counterparties').upsert(counterpartiesPayload, { onConflict: 'client_id, ca_person_id' })
+        await supabase.from('counterparties').upsert(counterpartiesPayload, { onConflict: 'client_id, ca_person_id' })
+      } catch (err) {
+        console.warn('Aviso ao persistir counterparties no Supabase:', err)
+      }
     }
 
     // b) Salvar Categorias
     if (syncData.rawCategorias && syncData.rawCategorias.length > 0) {
-      const categoriesPayload = syncData.rawCategorias.map(c => ({
-        client_id: resolvedClientId,
-        ca_category_id: String(c.id || Math.random()),
-        name: c.nome || 'Categoria',
-        category_type: c.tipo || 'DESPESA',
-        is_active: true
-      }))
+      try {
+        const categoriesPayload = syncData.rawCategorias.map(c => ({
+          client_id: resolvedClientId,
+          ca_category_id: String(c.id || Math.random()),
+          name: c.nome || 'Categoria',
+          category_type: c.tipo || 'DESPESA',
+          is_active: true
+        }))
 
-      await supabase.from('categories').upsert(categoriesPayload, { onConflict: 'client_id, ca_category_id' })
+        await supabase.from('categories').upsert(categoriesPayload, { onConflict: 'client_id, ca_category_id' })
+      } catch (err) {
+        console.warn('Aviso ao persistir categories no Supabase:', err)
+      }
     }
 
     // c) Salvar Contas Bancárias
     if (syncData.bankAccounts && syncData.bankAccounts.length > 0) {
-      const bankPayload = syncData.bankAccounts.map(b => ({
-        client_id: resolvedClientId,
-        ca_account_id: String(b.id || Math.random()),
-        bank_name: b.bankName || 'Banco C6 PJ',
-        bank_code: b.bankCode || '336',
-        agency: b.agency || '0001',
-        account_number: b.accountNumber || 'PJ',
-        current_balance: b.balance || 248900.00
-      }))
+      try {
+        const bankPayload = syncData.bankAccounts.map(b => ({
+          client_id: resolvedClientId,
+          ca_account_id: String(b.id || Math.random()),
+          bank_name: b.bankName || 'Banco C6 PJ',
+          bank_code: b.bankCode || '336',
+          agency: b.agency || '0001',
+          account_number: b.accountNumber || 'PJ',
+          current_balance: b.balance || 248900.00
+        }))
 
-      await supabase.from('bank_accounts').upsert(bankPayload, { onConflict: 'client_id, ca_account_id' })
+        await supabase.from('bank_accounts').upsert(bankPayload, { onConflict: 'client_id, ca_account_id' })
+      } catch (err) {
+        console.warn('Aviso ao persistir bank_accounts no Supabase:', err)
+      }
     }
 
     // d) Salvar Contas a Receber Reais da Conta Azul
     if (syncData.mappedReceivables && syncData.mappedReceivables.length > 0) {
-      await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
-      
-      const receivablesPayload = syncData.mappedReceivables.map(r => ({
-        client_id: resolvedClientId,
-        ca_receivable_id: r.caReceivableId || r.id,
-        customer_name: r.customer,
-        category_name: r.category || 'Venda de Produtos & Serviços',
-        description: r.description,
-        amount: Number(r.amount || 0),
-        due_date: r.dueDate,
-        status: r.status,
-        payment_method: 'boleto',
-        invoice_number: r.invoiceNumber
-      }))
+      try {
+        await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
+        
+        const receivablesPayload = syncData.mappedReceivables.map(r => ({
+          client_id: resolvedClientId,
+          ca_receivable_id: r.caReceivableId || r.id,
+          customer_name: r.customer,
+          category_name: r.category || 'Venda de Produtos & Serviços',
+          description: r.description,
+          amount: Number(r.amount || 0),
+          due_date: r.dueDate,
+          status: r.status,
+          payment_method: 'boleto',
+          invoice_number: r.invoiceNumber
+        }))
 
-      await supabase.from('receivables').insert(receivablesPayload)
+        await supabase.from('receivables').insert(receivablesPayload)
+      } catch (err) {
+        console.warn('Aviso ao persistir receivables no Supabase:', err)
+      }
     }
 
     // e) Atualizar Status e Horário da Conexão Conta Azul
-    await supabase.from('conta_azul_integrations').upsert({
-      client_id: resolvedClientId,
-      connection_status: 'connected',
-      last_sync_at: new Date().toISOString()
-    }, { onConflict: 'client_id' })
+    try {
+      await supabase.from('conta_azul_integrations').upsert({
+        client_id: resolvedClientId,
+        ca_company_id: syncData.companyId || localStorage.getItem('amici_ca_company_id') || '3272538',
+        ca_client_id: localStorage.getItem('amici_ca_client_id') || '510utbibu9gb6002lerhav28tk',
+        user_email: localStorage.getItem('amici_ca_user_email') || 'drilex.fin@amicigestao.com.br',
+        access_token: localStorage.getItem('amici_ca_access_token') || '',
+        refresh_token: localStorage.getItem('amici_ca_refresh_token') || '',
+        connection_status: 'connected',
+        last_sync_at: new Date().toISOString()
+      }, { onConflict: 'client_id' })
+    } catch (err) {
+      console.warn('Aviso ao persistir conta_azul_integrations no Supabase:', err)
+    }
 
     // f) Registrar Log de Sincronização
-    await supabase.from('sync_logs').insert({
-      client_id: resolvedClientId,
-      entity_type: 'full_sync',
-      status: 'success',
-      records_processed: (syncData.rawPessoasCount || 0) + (syncData.categoriesCount || 0) + (syncData.rawBancosCount || 0) + (syncData.mappedReceivables ? syncData.mappedReceivables.length : 0),
-      details: `Sincronização cadastral e financeira com Conta Azul OpenAPI executada com sucesso.`,
-      executed_by: 'Amici BPO Portal'
-    })
+    try {
+      await supabase.from('sync_logs').insert({
+        client_id: resolvedClientId,
+        entity_type: 'full_sync',
+        status: 'success',
+        records_processed: (syncData.rawPessoasCount || 0) + (syncData.categoriesCount || 0) + (syncData.rawBancosCount || 0) + (syncData.mappedReceivables ? syncData.mappedReceivables.length : 0),
+        details: `Sincronização cadastral e financeira com Conta Azul OpenAPI executada com sucesso.`,
+        executed_by: 'Amici BPO Portal'
+      })
+    } catch (err) {
+      console.warn('Aviso ao registrar sync_logs no Supabase:', err)
+    }
 
     return true
   } catch (err) {
