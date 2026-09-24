@@ -11,7 +11,8 @@ import {
   FileText,
   DollarSign,
   Calendar,
-  ArrowUpRight
+  ArrowUpRight,
+  RefreshCw
 } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusBadge } from '../utils/formatters'
 import { DateFilterBar } from '../components/DateFilterBar'
@@ -21,7 +22,9 @@ export function DrillexCustomersView({
   receivables = [],
   rawPessoas = [],
   clientName = 'Drillex',
-  onUpdateReceivableStatus
+  onUpdateReceivableStatus,
+  onSyncApi,
+  isSyncing = false
 }) {
   const [activeTab, setActiveTab] = useState('receivables') // 'receivables' | 'customers'
   const [searchTerm, setSearchTerm] = useState('')
@@ -128,6 +131,18 @@ export function DrillexCustomersView({
             Gestão dos clientes sacados e faturamento de {clientName} no período de <strong>{periodLabel}</strong>.
           </p>
         </div>
+
+        {onSyncApi && (
+          <button
+            type="button"
+            onClick={onSyncApi}
+            disabled={isSyncing}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-950/40 transition-all active:scale-95 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Sincronizando Conta Azul...' : 'Sincronizar Vendas Conta Azul'}</span>
+          </button>
+        )}
       </div>
 
       {/* Alternância de Abas: Contas a Receber vs Lista de Clientes */}

@@ -223,6 +223,10 @@ export function App() {
           setRawPessoas(pessoas)
         }
 
+        if (syncResult.mappedReceivables && syncResult.mappedReceivables.length > 0) {
+          setReceivables(syncResult.mappedReceivables)
+        }
+
         // Persiste as entidades cadastrais e conexão no banco Supabase
         await saveClientToSupabase(targetClient)
         await persistContaAzulSyncToSupabase(targetId, {
@@ -233,7 +237,7 @@ export function App() {
         // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase
         await loadDataFromSupabase(targetId)
 
-        setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados! Dados lidos 100% do banco Supabase.`)
+        setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${syncResult.mappedReceivables ? syncResult.mappedReceivables.length : 0} contas a receber)!`)
       } else {
         // Se a API retornou expirada (401), recarrega os dados intactos do Supabase
         await loadDataFromSupabase(targetId)
@@ -521,6 +525,8 @@ export function App() {
                   clientName={selectedClient.tradeName}
                   onUpdatePayableStatus={handleUpdatePayableStatus}
                   onAddPayable={handleAddPayable}
+                  onSyncApi={() => handleSyncApi(selectedClient)}
+                  isSyncing={isSyncing}
                 />
               )}
 
@@ -531,6 +537,8 @@ export function App() {
                   rawPessoas={rawPessoas}
                   clientName={selectedClient.tradeName}
                   onUpdateReceivableStatus={handleUpdateReceivableStatus}
+                  onSyncApi={() => handleSyncApi(selectedClient)}
+                  isSyncing={isSyncing}
                 />
               )}
 

@@ -226,6 +226,45 @@ export async function fetchContaAzulPessoas(tamanho = 100, tokenOverride) {
 }
 
 /**
+ * 5. GET /v1/venda/busca (Vendas e Contas a Receber da Conta Azul)
+ */
+export async function fetchContaAzulVendas(pagina = 1, tamanho = 100, tokenOverride) {
+  try {
+    const res = await fetchContaAzulApi(`/v1/venda/busca?pagina=${pagina}&tamanho_pagina=${tamanho}`, tokenOverride)
+    if (!res.ok) {
+      if (res.status === 401) {
+        console.warn('⚠️ Conta Azul API: Token expirado (401) em /v1/venda/busca.')
+      }
+      return []
+    }
+    const data = await res.json()
+    return data.itens || data.items || []
+  } catch (err) {
+    console.warn('Aviso ao buscar vendas na Conta Azul:', err.message)
+    return []
+  }
+}
+
+/**
+ * 6. GET /v1/financeiro/eventos-financeiros (Eventos Financeiros / Parcelas)
+ */
+export async function fetchContaAzulEventosFinanceiros(dataInicio, dataFim, tokenOverride) {
+  try {
+    let url = '/v1/financeiro/eventos-financeiros'
+    if (dataInicio && dataFim) {
+      url += `?data_inicio=${dataInicio}&data_fim=${dataFim}`
+    }
+    const res = await fetchContaAzulApi(url, tokenOverride)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.itens || data.items || []
+  } catch (err) {
+    console.warn('Aviso ao buscar eventos financeiros:', err.message)
+    return []
+  }
+}
+
+/**
  * Testa a conexão em tempo real com a API da Conta Azul
  */
 export async function testContaAzulApiLive(tokenOverride) {
@@ -412,17 +451,20 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
   }
 
   // 1. Tentar buscar dados
-  onProgress({ step: 'bancos', message: `Importando contas bancárias de ${clientTradeName} (/v1/conta-financeira)...`, progress: 30 })
+  onProgress({ step: 'bancos', message: `Importando contas bancárias de ${clientTradeName} (/v1/conta-financeira)...`, progress: 20 })
   let rawBancos = await fetchContaAzulContasFinanceiras(clientToken)
 
-  onProgress({ step: 'pessoas', message: `Importando fornecedores e clientes de ${clientTradeName} (/v1/pessoas)...`, progress: 55 })
+  onProgress({ step: 'pessoas', message: `Importando fornecedores e clientes de ${clientTradeName} (/v1/pessoas)...`, progress: 40 })
   let rawPessoas = await fetchContaAzulPessoas(100, clientToken)
 
-  onProgress({ step: 'categorias', message: `Importando plano de contas e categorias DRE de ${clientTradeName} (/v1/categorias)...`, progress: 75 })
+  onProgress({ step: 'vendas', message: `Importando vendas e contas a receber de ${clientTradeName} (/v1/venda/busca)...`, progress: 60 })
+  let rawVendas = await fetchContaAzulVendas(1, 100, clientToken)
+
+  onProgress({ step: 'categorias', message: `Importando plano de contas e categorias DRE de ${clientTradeName} (/v1/categorias)...`, progress: 80 })
   let rawCategorias = await fetchContaAzulCategorias(clientToken)
 
   // Se a API não respondeu dados (sessão expirada), NÃO zera o banco nem os cards
-  const isApiLive = rawBancos.length > 0 || rawPessoas.length > 0 || rawCategorias.length > 0
+  const isApiLive = rawBancos.length > 0 || rawPessoas.length > 0 || rawCategorias.length > 0 || rawVendas.length > 0
   if (!isApiLive) {
     onProgress({ step: 'done', message: `Token expirado na Conta Azul. Mantendo dados seguros do Supabase!`, progress: 100 })
     return {
@@ -435,7 +477,7 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
   onProgress({ step: 'centros', message: 'Importando centros de custo...', progress: 90 })
   const rawCentros = await fetchContaAzulCentrosDeCusto(1, 20, clientToken)
 
-  onProgress({ step: 'mapping', message: `Estruturando financeiro de ${clientTradeName} na carteira Amici BPO...`, progress: 98 })
+  onProgress({ step: 'mapping', message: `Estruturando financeiro de ${clientTradeName} na carteira Amici BPO...`, progress: 95 })
 
   // 1. Mapear Contas Bancárias Reais retornadas da Conta Azul
   const mappedBankAccounts = rawBancos.length > 0
@@ -452,6 +494,51 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
       }))
     : []
 
+  // 2. Mapear Vendas e Contas a Receber Reais da Conta Azul
+  const mappedReceivables = []
+  if (rawVendas && rawVendas.length > 0) {
+    rawVendas.forEach(v => {
+      const customerName = v.cliente?.nome || v.cliente?.razao_social || v.cliente_nome || 'Cliente Conta Azul'
+      const parcelas = Array.isArray(v.parcelas) && v.parcelas.length > 0
+        ? v.parcelas
+        : [{
+            id: v.id,
+            numero: 1,
+            data_vencimento: v.data_vencimento || v.data_emissao,
+            valor: v.total || v.valor || 0,
+            status: v.status
+          }]
+
+      parcelas.forEach((p, idx) => {
+        const rawStatus = String(p.status || v.status || '').toUpperCase()
+        let mappedStatus = 'pending'
+        if (rawStatus === 'RECEBIDO' || rawStatus === 'QUITADO' || rawStatus === 'ACQUITTED' || rawStatus === 'PAGO') {
+          mappedStatus = 'received'
+        } else if (rawStatus === 'CANCELADO' || rawStatus === 'CANCELLED') {
+          mappedStatus = 'cancelled'
+        } else {
+          mappedStatus = 'pending'
+        }
+
+        const due = (p.data_vencimento || p.vencimento || v.data_emissao || '').split('T')[0]
+
+        mappedReceivables.push({
+          id: p.id || `rec-${v.id}-${idx + 1}`,
+          caReceivableId: String(p.id || v.id),
+          clientId: clientId,
+          customer: customerName,
+          category: 'Venda de Produtos & Serviços',
+          description: `Venda ${v.numero || ''} - ${customerName}`.trim(),
+          amount: Number(p.valor || p.total || v.total || v.valor || 0),
+          dueDate: due || new Date().toISOString().split('T')[0],
+          status: mappedStatus,
+          paymentMethod: 'Boleto Bancário',
+          invoiceNumber: v.numero ? `Venda #${v.numero}` : 'Venda Conta Azul'
+        })
+      })
+    })
+  }
+
   const timestamp = new Date().toISOString()
   onProgress({ step: 'done', message: `Sincronização de ${clientTradeName} concluída com sucesso!`, progress: 100, timestamp })
 
@@ -462,10 +549,13 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
     rawPessoas: rawPessoas,
     rawCategorias: rawCategorias,
     rawCentros: rawCentros,
+    rawVendas: rawVendas,
+    mappedReceivables: mappedReceivables,
     categoriesCount: rawCategorias.length,
     rawBancosCount: rawBancos.length,
     rawPessoasCount: rawPessoas.length,
-    rawCentrosCount: rawCentros.length
+    rawCentrosCount: rawCentros.length,
+    rawVendasCount: rawVendas.length
   }
 }
 

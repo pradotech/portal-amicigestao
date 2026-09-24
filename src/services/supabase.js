@@ -595,20 +595,40 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
       await supabase.from('bank_accounts').upsert(bankPayload, { onConflict: 'client_id, ca_account_id' })
     }
 
-    // d) Atualizar Status e Horário da Conexão Conta Azul
+    // d) Salvar Contas a Receber Reais da Conta Azul
+    if (syncData.mappedReceivables && syncData.mappedReceivables.length > 0) {
+      await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
+      
+      const receivablesPayload = syncData.mappedReceivables.map(r => ({
+        client_id: resolvedClientId,
+        ca_receivable_id: r.caReceivableId || r.id,
+        customer_name: r.customer,
+        category_name: r.category || 'Venda de Produtos & Serviços',
+        description: r.description,
+        amount: Number(r.amount || 0),
+        due_date: r.dueDate,
+        status: r.status,
+        payment_method: 'boleto',
+        invoice_number: r.invoiceNumber
+      }))
+
+      await supabase.from('receivables').insert(receivablesPayload)
+    }
+
+    // e) Atualizar Status e Horário da Conexão Conta Azul
     await supabase.from('conta_azul_integrations').upsert({
       client_id: resolvedClientId,
       connection_status: 'connected',
       last_sync_at: new Date().toISOString()
     }, { onConflict: 'client_id' })
 
-    // e) Registrar Log de Sincronização
+    // f) Registrar Log de Sincronização
     await supabase.from('sync_logs').insert({
       client_id: resolvedClientId,
       entity_type: 'full_sync',
       status: 'success',
-      records_processed: (syncData.rawPessoasCount || 0) + (syncData.categoriesCount || 0) + (syncData.rawBancosCount || 0),
-      details: `Sincronização cadastral com Conta Azul OpenAPI executada. Dados financeiros preservados no Supabase.`,
+      records_processed: (syncData.rawPessoasCount || 0) + (syncData.categoriesCount || 0) + (syncData.rawBancosCount || 0) + (syncData.mappedReceivables ? syncData.mappedReceivables.length : 0),
+      details: `Sincronização cadastral e financeira com Conta Azul OpenAPI executada com sucesso.`,
       executed_by: 'Amici BPO Portal'
     })
 

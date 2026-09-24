@@ -17,7 +17,8 @@ import {
   Filter,
   FileText,
   DollarSign,
-  Calendar
+  Calendar,
+  RefreshCw
 } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusBadge } from '../utils/formatters'
 import { DateFilterBar } from '../components/DateFilterBar'
@@ -28,7 +29,9 @@ export function DrillexSuppliersView({
   rawPessoas = [],
   clientName = 'Drillex',
   onUpdatePayableStatus,
-  onAddPayable
+  onAddPayable,
+  onSyncApi,
+  isSyncing = false
 }) {
   const [activeTab, setActiveTab] = useState('payables') // 'payables' | 'suppliers'
   const [searchTerm, setSearchTerm] = useState('')
@@ -157,6 +160,18 @@ export function DrillexSuppliersView({
         </div>
 
         <div className="flex items-center gap-3">
+          {onSyncApi && (
+            <button
+              type="button"
+              onClick={onSyncApi}
+              disabled={isSyncing}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Conta Azul'}</span>
+            </button>
+          )}
+
           {selectedPayables.length > 0 && (
             <button
               type="button"
