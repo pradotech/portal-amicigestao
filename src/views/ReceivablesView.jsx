@@ -40,9 +40,35 @@ export function ReceivablesView({
     invoiceNumber: ''
   })
 
+  const isReceived = (r) => r.status === 'received' || r.status === 'paid' || r.status === 'liquidated' || r.status === 'RECEBIDO' || r.status === 'QUITADO'
+  const isOverdue = (r) => !isReceived(r) && (r.status === 'overdue' || (r.dueDate && r.dueDate < new Date().toISOString().split('T')[0]))
+
+  const getReceivableRemaining = (r) => {
+    if (isReceived(r)) return 0
+    if (r.amountRemaining !== undefined && r.amountRemaining !== null && Number(r.amountRemaining) > 0) {
+      return Number(r.amountRemaining)
+    }
+    return Number(r.amount || 0)
+  }
+
+  const getReceivableReceived = (r) => {
+    if (isReceived(r)) return Number(r.amount || 0)
+    if (r.amountPaid !== undefined && r.amountPaid !== null && Number(r.amountPaid) > 0) {
+      return Number(r.amountPaid)
+    }
+    return 0
+  }
+
   const filteredReceivables = receivables.filter(item => {
     const matchesClient = selectedClientId ? item.clientId === selectedClientId : true
-    const matchesStatus = filterStatus === 'all' ? true : item.status === filterStatus
+    const matchesStatus = filterStatus === 'all'
+      ? true
+      : filterStatus === 'received'
+      ? isReceived(item) || getReceivableReceived(item) > 0
+      : filterStatus === 'overdue'
+      ? isOverdue(item)
+      : item.status === filterStatus
+
     const matchesSearch =
       item.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -51,13 +77,11 @@ export function ReceivablesView({
     return matchesClient && matchesStatus && matchesSearch
   })
 
-  const totalAmount = filteredReceivables.reduce((acc, r) => acc + (r.amount || 0), 0)
-  const receivedAmount = filteredReceivables
-    .filter(r => r.status === 'received')
-    .reduce((acc, r) => acc + (r.amount || 0), 0)
+  const totalAmount = filteredReceivables.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+  const receivedAmount = filteredReceivables.reduce((acc, r) => acc + getReceivableReceived(r), 0)
   const overdueAmount = filteredReceivables
-    .filter(r => r.status === 'overdue')
-    .reduce((acc, r) => acc + (r.amount || 0), 0)
+    .filter(r => isOverdue(r))
+    .reduce((acc, r) => acc + getReceivableRemaining(r), 0)
 
   const handleCreateSubmit = (e) => {
     e.preventDefault()

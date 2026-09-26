@@ -88,6 +88,33 @@ export function DashboardView({
   const filteredPayables = filterByDate(basePayables, 'dueDate')
   const filteredReceivables = filterByDate(baseReceivables, 'dueDate')
 
+  const isPaidPayable = (p) => p.status === 'paid' || p.status === 'liquidated' || p.status === 'PAGO' || p.status === 'QUITADO'
+  const isReceivedRec = (r) => r.status === 'received' || r.status === 'paid' || r.status === 'liquidated' || r.status === 'RECEBIDO' || r.status === 'QUITADO'
+
+  const getPayablePaid = (p) => {
+    if (isPaidPayable(p)) return Number(p.amount || 0)
+    if (p.amountPaid !== undefined && p.amountPaid !== null && Number(p.amountPaid) > 0) return Number(p.amountPaid)
+    return 0
+  }
+
+  const getPayableRemaining = (p) => {
+    if (isPaidPayable(p)) return 0
+    if (p.amountRemaining !== undefined && p.amountRemaining !== null && Number(p.amountRemaining) > 0) return Number(p.amountRemaining)
+    return Number(p.amount || 0)
+  }
+
+  const getReceivableReceived = (r) => {
+    if (isReceivedRec(r)) return Number(r.amount || 0)
+    if (r.amountPaid !== undefined && r.amountPaid !== null && Number(r.amountPaid) > 0) return Number(r.amountPaid)
+    return 0
+  }
+
+  const getReceivableRemaining = (r) => {
+    if (isReceivedRec(r)) return 0
+    if (r.amountRemaining !== undefined && r.amountRemaining !== null && Number(r.amountRemaining) > 0) return Number(r.amountRemaining)
+    return Number(r.amount || 0)
+  }
+
   // =========================================================================
   // MÉTRICAS CALCULADAS DINAMICAMENTE PARA O PERÍODO SELECIONADO
   // =========================================================================
@@ -96,21 +123,21 @@ export function DashboardView({
   const periodRevenue = totalReceivablesAmount
 
   // Contagens e valores de pagamentos no período
-  const paidPayables = filteredPayables.filter(p => p.status === 'paid')
-  const paidPayablesAmount = paidPayables.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
-  const pendingPayables = filteredPayables.filter(p => p.status === 'pending_client' || p.status === 'scheduled' || p.status === 'pending' || p.status === 'approved')
-  const pendingPayablesAmount = pendingPayables.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
-  const overduePayables = filteredPayables.filter(p => p.status === 'overdue')
-  const overduePayablesAmount = overduePayables.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const paidPayables = filteredPayables.filter(p => isPaidPayable(p) || getPayablePaid(p) > 0)
+  const paidPayablesAmount = filteredPayables.reduce((acc, p) => acc + getPayablePaid(p), 0)
+  const pendingPayables = filteredPayables.filter(p => !isPaidPayable(p) && p.status !== 'overdue')
+  const pendingPayablesAmount = pendingPayables.reduce((acc, p) => acc + getPayableRemaining(p), 0)
+  const overduePayables = filteredPayables.filter(p => !isPaidPayable(p) && (p.status === 'overdue' || (p.dueDate && p.dueDate < new Date().toISOString().split('T')[0])))
+  const overduePayablesAmount = overduePayables.reduce((acc, p) => acc + getPayableRemaining(p), 0)
   const pendingPayablesCount = pendingPayables.length
   const overduePayablesCount = overduePayables.length
   const paidPayablesCount = paidPayables.length
 
   // Contagens e valores de recebimentos no período
-  const receivedReceivables = filteredReceivables.filter(r => r.status === 'received' || r.status === 'paid')
-  const receivedReceivablesAmount = receivedReceivables.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
-  const pendingReceivables = filteredReceivables.filter(r => r.status !== 'received' && r.status !== 'paid')
-  const pendingReceivablesAmount = pendingReceivables.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+  const receivedReceivables = filteredReceivables.filter(r => isReceivedRec(r) || getReceivableReceived(r) > 0)
+  const receivedReceivablesAmount = filteredReceivables.reduce((acc, r) => acc + getReceivableReceived(r), 0)
+  const pendingReceivables = filteredReceivables.filter(r => !isReceivedRec(r))
+  const pendingReceivablesAmount = pendingReceivables.reduce((acc, r) => acc + getReceivableRemaining(r), 0)
   const liquidityRate = periodRevenue > 0 ? Math.round((receivedReceivablesAmount / periodRevenue) * 100) : 0
 
   // Faturamento Médio Diário no Período

@@ -242,57 +242,74 @@ export function App() {
     localStorage.setItem('amici_transactions_v4', JSON.stringify(transactions))
   }, [transactions])
 
+  // 1. Carregamento inicial de clientes cadastrados do Supabase (Apenas 1 vez no mount)
   useEffect(() => {
-    if (selectedClient) {
-      localStorage.setItem('amici_selected_client_id_v4', selectedClient.id)
-    } else {
-      localStorage.removeItem('amici_selected_client_id_v4')
-    }
-  }, [selectedClient])
+    let isMounted = true
 
-  const loadDataFromSupabase = async (clientIdOverride) => {
-    const creds = getSupabaseCredentials()
-    setSupabaseConfigured(creds.isConfigured)
+    async function initClients() {
+      const creds = getSupabaseCredentials()
+      setSupabaseConfigured(creds.isConfigured)
 
-    if (creds.isConfigured) {
-      try {
-        // 1. Carregar Clientes do Supabase
-        const supaClients = await fetchClientsFromSupabase()
-        if (supaClients && supaClients.length > 0) {
-          setClients(supaClients)
-          if (!selectedClient) {
+      if (creds.isConfigured) {
+        try {
+          const supaClients = await fetchClientsFromSupabase()
+          if (isMounted && supaClients && supaClients.length > 0) {
+            setClients(supaClients)
             const savedId = localStorage.getItem('amici_selected_client_id_v4')
-            const matched = supaClients.find(c => c.id === savedId) || supaClients[0]
-            setSelectedClient(matched)
+            if (savedId) {
+              const matched = supaClients.find(c => c.id === savedId)
+              if (matched) {
+                setSelectedClient(matched)
+              }
+            }
           }
+        } catch (err) {
+          console.warn('Erro ao carregar clientes do Supabase:', err)
         }
-
-        const targetId = clientIdOverride || selectedClient?.id || (supaClients && supaClients[0]?.id) || 'd0000000-0000-0000-0000-000000000001'
-
-        // 2. Carregar Contas a Pagar do Supabase (Fonte Única da Verdade)
-        const supaPayables = await fetchPayablesFromSupabase(targetId)
-        setPayables(supaPayables || [])
-
-        // 3. Carregar Contas a Receber do Supabase (Fonte Única da Verdade)
-        const supaReceivables = await fetchReceivablesFromSupabase(targetId)
-        setReceivables(supaReceivables || [])
-
-        // 4. Carregar Transações do Supabase (Fonte Única da Verdade)
-        const supaTx = await fetchBankTransactionsFromSupabase(targetId)
-        setTransactions(supaTx || [])
-
-        // 5. Carregar Fornecedores e Clientes do Supabase
-        const supaPessoas = await fetchCounterpartiesFromSupabase(targetId)
-        setRawPessoas(supaPessoas || [])
-      } catch (err) {
-        console.warn('Erro ao carregar dados do Supabase:', err)
       }
+    }
+
+    initClients()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // 2. Carrega dados financeiros do Supabase sempre que o cliente ativo for selecionado/alterado
+  const loadDataFromSupabase = async (clientIdOverride) => {
+    const targetId = clientIdOverride || selectedClient?.id
+    if (!targetId) return
+
+    try {
+      const [supaPayables, supaReceivables, supaTx, supaPessoas] = await Promise.all([
+        fetchPayablesFromSupabase(targetId),
+        fetchReceivablesFromSupabase(targetId),
+        fetchBankTransactionsFromSupabase(targetId),
+        fetchCounterpartiesFromSupabase(targetId)
+      ])
+
+      setPayables(supaPayables || [])
+      setReceivables(supaReceivables || [])
+      setTransactions(supaTx || [])
+      setRawPessoas(supaPessoas || [])
+    } catch (err) {
+      console.warn('Erro ao carregar dados do Supabase para o cliente:', err)
     }
   }
 
   useEffect(() => {
-    loadDataFromSupabase(selectedClient?.id)
+    if (selectedClient?.id) {
+      localStorage.setItem('amici_selected_client_id_v4', selectedClient.id)
+      loadDataFromSupabase(selectedClient.id)
+    }
   }, [selectedClient?.id])
+
+  // Ação de voltar para a tela de escolha de clientes
+  const handleBackToLanding = () => {
+    localStorage.removeItem('amici_selected_client_id_v4')
+    setSelectedClient(null)
+  }
 
   // Sincronizar cadastros da Conta Azul mantendo o Supabase como fonte única de lançamentos financeiros
   const handleSyncApi = async (targetClient = selectedClient) => {
@@ -353,6 +370,7 @@ export function App() {
 
   // Ao selecionar um cliente na tela principal
   const handleSelectClient = (client) => {
+    localStorage.setItem('amici_selected_client_id_v4', client.id)
     setSelectedClient(client)
     setActiveTab('dashboard')
   }
@@ -491,7 +509,7 @@ export function App() {
       {/* Barra de Navegação Superior */}
       <Navbar
         selectedClient={selectedClient}
-        onBackToLanding={() => setSelectedClient(null)}
+        onBackToLanding={handleBackToLanding}
         viewMode={viewMode}
         onToggleViewMode={() => setViewMode(prev => prev === 'bpo' ? 'client' : 'bpo')}
         isSyncing={isSyncing}
@@ -593,7 +611,7 @@ export function App() {
             onSelectTab={setActiveTab}
             counts={counts}
             clientName={selectedClient.tradeName}
-            onBackToLanding={() => setSelectedClient(null)}
+            onBackToLanding={handleBackToLanding}
           />
         )}
 

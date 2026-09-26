@@ -89,12 +89,15 @@ export function getStatusBadge(status) {
       return { label: 'Aprovado', bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
     case 'paid':
     case 'received':
-      return { label: 'Liquidado', bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
+      return { label: 'Pago', bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
+    case 'partial':
+    case 'PAGO_PARCIAL':
+      return { label: 'Pago Parcial', bg: 'bg-sky-500/10 text-sky-300 border-sky-500/20' }
     case 'overdue':
       return { label: 'Vencido', bg: 'bg-rose-500/10 text-rose-400 border-rose-500/20' }
     case 'pending':
-      return { label: 'Pendente', bg: 'bg-slate-500/10 text-slate-300 border-slate-500/20' }
+      return { label: 'Em Aberto', bg: 'bg-amber-500/10 text-amber-300 border-amber-500/20' }
     default:
-      return { label: status, bg: 'bg-slate-500/10 text-slate-400 border-slate-500/20' }
+      return { label: status || 'Em Aberto', bg: 'bg-slate-500/10 text-slate-400 border-slate-500/20' }
   }
 }

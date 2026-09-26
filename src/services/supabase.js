@@ -278,20 +278,28 @@ export async function fetchPayablesFromSupabase(clientId) {
 
     if (error || !data) return []
 
-    return data.map(p => ({
-      id: p.id,
-      clientId: p.client_id,
-      supplier: p.supplier_name,
-      category: p.category_name,
-      description: p.description,
-      amount: Number(p.amount || 0),
-      dueDate: p.due_date,
-      status: p.status,
-      bankAccount: 'Banco Itaú Unibanco',
-      barcode: p.barcode || '',
-      approvalStatus: p.status === 'pending_client' ? 'pending' : 'approved',
-      hasAttachment: true
-    }))
+    return data.map(p => {
+      const rawAmount = Number(p.amount || 0)
+      const amountPaid = p.amount_paid !== null && p.amount_paid !== undefined ? Number(p.amount_paid) : (p.status === 'paid' ? rawAmount : 0)
+      const amountRemaining = p.amount_remaining !== null && p.amount_remaining !== undefined ? Number(p.amount_remaining) : (p.status === 'paid' ? 0 : rawAmount)
+
+      return {
+        id: p.id,
+        clientId: p.client_id,
+        supplier: p.supplier_name,
+        category: p.category_name,
+        description: p.description,
+        amount: rawAmount,
+        amountPaid: amountPaid,
+        amountRemaining: amountRemaining,
+        dueDate: p.due_date,
+        status: p.status,
+        bankAccount: 'Banco Itaú Unibanco',
+        barcode: p.barcode || '',
+        approvalStatus: p.status === 'pending_client' ? 'pending' : 'approved',
+        hasAttachment: true
+      }
+    })
   } catch (err) {
     console.error('Erro ao buscar payables no Supabase:', err)
     return []
@@ -379,18 +387,26 @@ export async function fetchReceivablesFromSupabase(clientId) {
 
     if (error || !data) return []
 
-    return data.map(r => ({
-      id: r.id,
-      clientId: r.client_id,
-      customer: r.customer_name,
-      category: r.category_name,
-      description: r.description,
-      amount: Number(r.amount || 0),
-      dueDate: r.due_date,
-      status: r.status,
-      paymentMethod: r.payment_method === 'boleto' ? 'Boleto Bancário' : (r.payment_method || 'Boleto / PIX'),
-      invoiceNumber: r.invoice_number || 'NF-e Oficial'
-    }))
+    return data.map(r => {
+      const rawAmount = Number(r.amount || 0)
+      const amountPaid = r.amount_paid !== null && r.amount_paid !== undefined ? Number(r.amount_paid) : (r.status === 'received' ? rawAmount : 0)
+      const amountRemaining = r.amount_remaining !== null && r.amount_remaining !== undefined ? Number(r.amount_remaining) : (r.status === 'received' ? 0 : rawAmount)
+
+      return {
+        id: r.id,
+        clientId: r.client_id,
+        customer: r.customer_name,
+        category: r.category_name,
+        description: r.description,
+        amount: rawAmount,
+        amountPaid: amountPaid,
+        amountRemaining: amountRemaining,
+        dueDate: r.due_date,
+        status: r.status,
+        paymentMethod: r.payment_method === 'boleto' ? 'Boleto Bancário' : (r.payment_method || 'Boleto / PIX'),
+        invoiceNumber: r.invoice_number || 'NF-e Oficial'
+      }
+    })
   } catch (err) {
     console.error('Erro ao buscar receivables no Supabase:', err)
     return []

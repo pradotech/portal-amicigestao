@@ -70,10 +70,27 @@ export function DrillexSuppliersView({
 
   const todayStr = new Date().toISOString().split('T')[0]
 
-  const isPaid = (p) => p.status === 'paid' || p.status === 'liquidated' || p.status === 'PAGO'
-  const isOverdue = (p) => !isPaid(p) && (p.status === 'overdue' || (p.dueDate && p.dueDate < todayStr))
-  const isToday = (p) => !isPaid(p) && p.dueDate && p.dueDate === todayStr
-  const isFuture = (p) => !isPaid(p) && p.dueDate && p.dueDate > todayStr
+  const isPaid = (p) => p.status === 'paid' || p.status === 'liquidated' || p.status === 'PAGO' || p.status === 'QUITADO'
+  const isPartial = (p) => p.status === 'partial' || p.status === 'PAGO_PARCIAL' || (Number(p.amountPaid) > 0 && Number(p.amountRemaining) > 0)
+  const isOverdue = (p) => !isPaid(p) && (p.status === 'overdue' || p.status === 'ATRASADO' || (p.dueDate && p.dueDate < todayStr))
+  const isToday = (p) => !isPaid(p) && !isOverdue(p) && (p.status === 'today' || (p.dueDate && p.dueDate === todayStr))
+  const isFuture = (p) => !isPaid(p) && !isOverdue(p) && !isToday(p)
+
+  const getPayableRemaining = (p) => {
+    if (isPaid(p)) return 0
+    if (p.amountRemaining !== undefined && p.amountRemaining !== null && Number(p.amountRemaining) > 0) {
+      return Number(p.amountRemaining)
+    }
+    return Number(p.amount || 0)
+  }
+
+  const getPayablePaid = (p) => {
+    if (isPaid(p)) return Number(p.amount || 0)
+    if (p.amountPaid !== undefined && p.amountPaid !== null && Number(p.amountPaid) > 0) {
+      return Number(p.amountPaid)
+    }
+    return 0
+  }
 
   // Filtra pessoas que são Fornecedores ou Transportadoras
   const fornecedores = rawPessoas.filter(p => {
@@ -112,20 +129,22 @@ export function DrillexSuppliersView({
     (f.documento && f.documento.includes(searchTerm))
   )
 
-  // Métricas dos 5 Cards da Conta Azul (Calculados 100% dos registros reais do banco)
+  // Métricas dos 5 Cards Oficiais da Conta Azul (Vencidos, Vencem hoje, A vencer, Pagos, Total do período)
   const vencidosList = dateFilteredPayables.filter(p => isOverdue(p))
-  const vencidosAmount = vencidosList.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const vencidosAmount = vencidosList.reduce((acc, p) => acc + getPayableRemaining(p), 0)
 
   const vencemHojeList = dateFilteredPayables.filter(p => isToday(p))
-  const vencemHojeAmount = vencemHojeList.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const vencemHojeAmount = vencemHojeList.reduce((acc, p) => acc + getPayableRemaining(p), 0)
 
   const aVencerList = dateFilteredPayables.filter(p => isFuture(p))
-  const aVencerAmount = aVencerList.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const aVencerAmount = aVencerList.reduce((acc, p) => acc + getPayableRemaining(p), 0)
 
-  const pagosList = dateFilteredPayables.filter(p => isPaid(p))
-  const pagosAmount = pagosList.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const pagosList = dateFilteredPayables.filter(p => isPaid(p) || getPayablePaid(p) > 0)
+  const pagosAmount = dateFilteredPayables.reduce((acc, p) => acc + getPayablePaid(p), 0)
 
-  const totalPeriodoAmount = dateFilteredPayables.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const totalPeriodoAmount = (vencidosAmount + vencemHojeAmount + aVencerAmount + pagosAmount) > 0
+    ? (vencidosAmount + vencemHojeAmount + aVencerAmount + pagosAmount)
+    : dateFilteredPayables.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
 
   const selectedTotalAmount = payables
     .filter(p => selectedPayables.includes(p.id))
@@ -412,13 +431,20 @@ export function DrillexSuppliersView({
                         {formatDate(item.dueDate)}
                       </td>
 
-                      <td className="py-3 text-white font-bold font-mono text-sm">
-                        {formatCurrency(item.amount)}
+                      <td className="py-3 font-mono text-sm">
+                        <div className="font-bold text-white">
+                          {formatCurrency(item.amount)}
+                        </div>
+                        {item.amountRemaining !== undefined && item.amountRemaining !== null && item.amountRemaining > 0 && item.amountRemaining < item.amount && (
+                          <div className="text-[10px] text-amber-400 font-semibold">
+                            A pagar: {formatCurrency(item.amountRemaining)}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3">
                         <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold border ${badge.bg}`}>
-                          {badge.label}
+                          {item.status === 'partial' || item.status === 'PAGO_PARCIAL' ? 'Pago Parcial' : badge.label}
                         </span>
                       </td>
 

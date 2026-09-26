@@ -60,10 +60,27 @@ export function DrillexCustomersView({
 
   const todayStr = new Date().toISOString().split('T')[0]
 
-  const isReceived = (r) => r.status === 'received' || r.status === 'paid' || r.status === 'liquidated' || r.status === 'RECEBIDO'
-  const isOverdue = (r) => !isReceived(r) && r.dueDate && r.dueDate < todayStr
-  const isToday = (r) => !isReceived(r) && r.dueDate && r.dueDate === todayStr
-  const isFuture = (r) => !isReceived(r) && r.dueDate && r.dueDate > todayStr
+  const isReceived = (r) => r.status === 'received' || r.status === 'paid' || r.status === 'liquidated' || r.status === 'RECEBIDO' || r.status === 'QUITADO' || r.status === 'CONCRETIZADO' || r.status === 'FATURADO'
+  const isPartial = (r) => r.status === 'partial' || r.status === 'PAGO_PARCIAL' || (Number(r.amountPaid) > 0 && Number(r.amountRemaining) > 0)
+  const isOverdue = (r) => !isReceived(r) && (r.status === 'overdue' || r.status === 'ATRASADO' || (r.dueDate && r.dueDate < todayStr))
+  const isToday = (r) => !isReceived(r) && !isOverdue(r) && (r.status === 'today' || (r.dueDate && r.dueDate === todayStr))
+  const isFuture = (r) => !isReceived(r) && !isOverdue(r) && !isToday(r)
+
+  const getReceivableRemaining = (r) => {
+    if (isReceived(r)) return 0
+    if (r.amountRemaining !== undefined && r.amountRemaining !== null && Number(r.amountRemaining) > 0) {
+      return Number(r.amountRemaining)
+    }
+    return Number(r.amount || 0)
+  }
+
+  const getReceivableReceived = (r) => {
+    if (isReceived(r)) return Number(r.amount || 0)
+    if (r.amountPaid !== undefined && r.amountPaid !== null && Number(r.amountPaid) > 0) {
+      return Number(r.amountPaid)
+    }
+    return 0
+  }
 
   // Filtra pessoas que são Clientes
   const clientes = rawPessoas.filter(p => {
@@ -78,7 +95,7 @@ export function DrillexCustomersView({
   const filteredReceivables = dateFilteredReceivables.filter(item => {
     let matchesStatus = true
     if (filterStatus === 'received') {
-      matchesStatus = isReceived(item)
+      matchesStatus = isReceived(item) || getReceivableReceived(item) > 0
     } else if (filterStatus === 'overdue') {
       matchesStatus = isOverdue(item)
     } else if (filterStatus === 'today') {
@@ -102,20 +119,22 @@ export function DrillexCustomersView({
     (c.documento && c.documento.includes(searchTerm))
   )
 
-  // Métricas dos 5 Cards da Conta Azul (Calculados 100% dos registros reais do banco)
+  // Métricas dos 5 Cards Oficiais da Conta Azul (Vencidos, Vencem hoje, A vencer, Recebidos, Total do período)
   const vencidosList = dateFilteredReceivables.filter(r => isOverdue(r))
-  const vencidosAmount = vencidosList.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+  const vencidosAmount = vencidosList.reduce((acc, r) => acc + getReceivableRemaining(r), 0)
 
   const vencemHojeList = dateFilteredReceivables.filter(r => isToday(r))
-  const vencemHojeAmount = vencemHojeList.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+  const vencemHojeAmount = vencemHojeList.reduce((acc, r) => acc + getReceivableRemaining(r), 0)
 
   const aVencerList = dateFilteredReceivables.filter(r => isFuture(r))
-  const aVencerAmount = aVencerList.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+  const aVencerAmount = aVencerList.reduce((acc, r) => acc + getReceivableRemaining(r), 0)
 
-  const recebidosList = dateFilteredReceivables.filter(r => isReceived(r))
-  const recebidosAmount = recebidosList.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+  const recebidosList = dateFilteredReceivables.filter(r => isReceived(r) || getReceivableReceived(r) > 0)
+  const recebidosAmount = dateFilteredReceivables.reduce((acc, r) => acc + getReceivableReceived(r), 0)
 
-  const totalPeriodoAmount = dateFilteredReceivables.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+  const totalPeriodoAmount = (vencidosAmount + vencemHojeAmount + aVencerAmount + recebidosAmount) > 0
+    ? (vencidosAmount + vencemHojeAmount + aVencerAmount + recebidosAmount)
+    : dateFilteredReceivables.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -327,7 +346,8 @@ export function DrillexCustomersView({
                   <th className="pb-3 font-semibold">Cliente Sacado (Drillex)</th>
                   <th className="pb-3 font-semibold">Documento</th>
                   <th className="pb-3 font-semibold">Vencimento</th>
-                  <th className="pb-3 font-semibold">Valor</th>
+                  <th className="pb-3 font-semibold">Valor Total</th>
+                  <th className="pb-3 font-semibold">A Receber</th>
                   <th className="pb-3 font-semibold">Status</th>
                   <th className="pb-3 font-semibold text-right">Ação</th>
                 </tr>
@@ -335,6 +355,9 @@ export function DrillexCustomersView({
               <tbody className="divide-y divide-slate-800/60">
                 {filteredReceivables.map(item => {
                   const badge = getStatusBadge(item.status)
+                  const remaining = getReceivableRemaining(item)
+                  const received = getReceivableReceived(item)
+                  const hasPartial = isPartial(item)
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
@@ -351,8 +374,17 @@ export function DrillexCustomersView({
                         {formatDate(item.dueDate)}
                       </td>
 
+                      <td className="py-3 text-slate-300 font-mono">
+                        <div>{formatCurrency(item.amount)}</div>
+                        {hasPartial && (
+                          <div className="text-[10px] text-emerald-400">Rec: {formatCurrency(received)}</div>
+                        )}
+                      </td>
+
                       <td className="py-3 text-white font-bold font-mono text-sm">
-                        {formatCurrency(item.amount)}
+                        <span className={remaining > 0 ? (isOverdue(item) ? 'text-rose-400' : 'text-emerald-300') : 'text-slate-500'}>
+                          {formatCurrency(remaining)}
+                        </span>
                       </td>
 
                       <td className="py-3">
@@ -362,7 +394,7 @@ export function DrillexCustomersView({
                       </td>
 
                       <td className="py-3 text-right">
-                        {item.status !== 'received' && (
+                        {!isReceived(item) && (
                           <button
                             type="button"
                             onClick={() => onUpdateReceivableStatus(item.id, 'received')}

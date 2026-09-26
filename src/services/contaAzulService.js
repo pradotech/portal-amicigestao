@@ -272,36 +272,99 @@ export async function fetchContaAzulVendas(pagina = 1, tamanho = 100, queryParam
 }
 
 /**
- * Busca abrangente de todas as vendas da Conta Azul com paginação completa e extração profunda de parcelas
+ * Busca abrangente de todas as Contas a Receber e Vendas da Conta Azul via OpenAPI Financeiro e Vendas
  */
 export async function fetchAllRecentContaAzulVendas(tokenOverride) {
-  const allSalesMap = new Map()
+  const allReceivablesMap = new Map()
 
-  // 1. Busca todas as páginas de vendas da Conta Azul (paginação 1 a 5)
+  // 1. Consultar Endpoints Oficiais de Contas a Receber Financeiro e Receitas
+  const financialReceivableEndpoints = [
+    '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar?pagina=1&tamanho_pagina=100',
+    '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar?pagina=1&tamanho_pagina=100&data_vencimento_de=2026-01-01&data_vencimento_ate=2026-12-31',
+    '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar?pagina=1&tamanho_pagina=100&data_vencimento_inicio=2026-01-01&data_vencimento_fim=2026-12-31',
+    '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar?pagina=1&tamanho_pagina=100&data_competencia_de=2026-01-01&data_competencia_ate=2026-12-31',
+    '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar?pagina=1&tamanho_pagina=100&data_competencia_inicio=2026-01-01&data_competencia_fim=2026-12-31',
+    '/v1/financeiro/eventos-financeiros/contas-a-receber?pagina=1&tamanho_pagina=100',
+    '/v1/financeiro/contas-a-receber/buscar?pagina=1&tamanho_pagina=100',
+    '/v1/financeiro/contas-a-receber?pagina=1&tamanho_pagina=100',
+    '/v1/financeiro/eventos-financeiros?pagina=1&tamanho_pagina=100&tipo=RECEITA',
+    '/v1/financeiro/eventos-financeiros?pagina=1&tamanho_pagina=100'
+  ]
+
+  for (const endpoint of financialReceivableEndpoints) {
+    try {
+      const res = await fetchContaAzulApi(endpoint, tokenOverride)
+      if (res.ok) {
+        const data = await res.json()
+        const list = data.itens || data.items || data.receitas || data.contas_a_receber || data.eventos || (Array.isArray(data) ? data : [])
+        if (Array.isArray(list) && list.length > 0) {
+          list.forEach(item => {
+            if (item) {
+              const itemId = item.id || item.id_evento || item.numero || `rec-${Math.random()}`
+              allReceivablesMap.set(String(itemId), item)
+            }
+          })
+          console.log(`✓ Obtidos ${list.length} registros de contas a receber financeiras via ${endpoint}`)
+
+          // Paginação se houver mais páginas
+          const totalPages = data.total_de_paginas || data.totalPages || (data.itens_totais ? Math.ceil(data.itens_totais / 100) : 1)
+          if (totalPages > 1) {
+            for (let p = 2; p <= Math.min(totalPages, 5); p++) {
+              try {
+                const nextUrl = endpoint.replace('pagina=1', `pagina=${p}`)
+                const nextRes = await fetchContaAzulApi(nextUrl, tokenOverride)
+                if (nextRes.ok) {
+                  const nextData = await nextRes.json()
+                  const nextList = nextData.itens || nextData.items || []
+                  nextList.forEach(item => {
+                    if (item) {
+                      const itemId = item.id || item.id_evento || `rec-${Math.random()}`
+                      allReceivablesMap.set(String(itemId), item)
+                    }
+                  })
+                }
+              } catch (e) {
+                console.warn(`Erro na página ${p} de recebíveis:`, e.message)
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`Tentativa em ${endpoint} falhou:`, err.message)
+    }
+  }
+
+  // 2. Busca também módulo comercial de Vendas da Conta Azul (/v1/venda/busca e /v1/venda)
   try {
     const pagePromises = [1, 2, 3, 4, 5].map(p =>
       fetchContaAzulVendas(p, 100, '', tokenOverride)
     )
     const pageResults = await Promise.all(pagePromises)
     pageResults.flat().forEach(v => {
-      if (v && v.id) allSalesMap.set(v.id, v)
+      if (v && v.id) {
+        // Se já não estiver mapeado com dados mais ricos do financeiro
+        if (!allReceivablesMap.has(String(v.id))) {
+          allReceivablesMap.set(String(v.id), v)
+        }
+      }
     })
   } catch (e) {
-    console.warn('Aviso ao paginar vendas da Conta Azul:', e.message)
+    console.warn('Aviso ao paginar vendas comerciais:', e.message)
   }
 
-  const allVendasList = Array.from(allSalesMap.values())
+  const allVendasList = Array.from(allReceivablesMap.values())
   if (allVendasList.length === 0) return []
 
-  // 2. Busca detalhes com parcelas das vendas de 2026 em lotes para obter datas de vencimento reais
-  const vendasRecentes = allVendasList.filter(v =>
-    (v.data && v.data >= '2026-01-01') || (v.numero && Number(v.numero) >= 2000)
+  // 3. Busca detalhes de vendas comerciais para extrair parcelas se necessário
+  const vendasSemParcelas = allVendasList.filter(v =>
+    !v.condicao_pagamento && !v.parcelas && !v.parcelas_financeiras && ((v.data && v.data >= '2026-01-01') || (v.numero && Number(v.numero) >= 2000))
   )
 
   const detailedVendasMap = new Map()
-  const BATCH_SIZE = 20
-  for (let i = 0; i < vendasRecentes.length; i += BATCH_SIZE) {
-    const batch = vendasRecentes.slice(i, i + BATCH_SIZE)
+  const BATCH_SIZE = 15
+  for (let i = 0; i < Math.min(vendasSemParcelas.length, 45); i += BATCH_SIZE) {
+    const batch = vendasSemParcelas.slice(i, i + BATCH_SIZE)
     const details = await Promise.all(
       batch.map(async (v) => {
         try {
@@ -315,38 +378,78 @@ export async function fetchAllRecentContaAzulVendas(tokenOverride) {
       })
     )
     details.forEach(d => {
-      if (d && d.id) detailedVendasMap.set(d.id, d)
+      if (d && d.id) detailedVendasMap.set(String(d.id), d)
     })
   }
 
-  return allVendasList.map(v => detailedVendasMap.get(v.id) || v)
+  return allVendasList.map(v => detailedVendasMap.get(String(v.id)) || v)
 }
 
 /**
- * 6. GET /v1/financeiro/eventos-financeiros (Eventos Financeiros, Contas a Pagar e Despesas)
+ * 6. GET /v1/financeiro/eventos-financeiros/contas-a-pagar/buscar (Contas a Pagar e Despesas Oficiais)
  */
 export async function fetchAllContaAzulDespesas(tokenOverride) {
   const allDespesasMap = new Map()
 
-  // 1. Contas a pagar e eventos
-  try {
-    const res = await fetchContaAzulApi('/v1/financeiro/eventos-financeiros?pagina=1&tamanho_pagina=100', tokenOverride)
-    if (res.ok) {
-      const data = await res.json()
-      const list = data.itens || data.items || []
-      list.forEach(item => { if (item && item.id) allDespesasMap.set(item.id, item) })
-    }
-  } catch (err) {}
+  // Candidatos de endpoints da API Financeira da Conta Azul para Contas a Pagar / Despesas
+  const candidateEndpoints = [
+    '/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar?pagina=1&tamanho_pagina=100',
+    '/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar?pagina=1&tamanho_pagina=100&data_vencimento_de=2026-01-01&data_vencimento_ate=2026-12-31',
+    '/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar?pagina=1&tamanho_pagina=100&data_vencimento_inicio=2026-01-01&data_vencimento_fim=2026-12-31',
+    '/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar?pagina=1&tamanho_pagina=100&data_competencia_de=2026-01-01&data_competencia_ate=2026-12-31',
+    '/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar?pagina=1&tamanho_pagina=100&data_competencia_inicio=2026-01-01&data_competencia_fim=2026-12-31',
+    '/v1/financeiro/eventos-financeiros/contas-a-pagar?pagina=1&tamanho_pagina=100',
+    '/v1/compras/busca?pagina=1&tamanho_pagina=100',
+    '/v1/compras?pagina=1&tamanho_pagina=100',
+    '/v1/financeiro/contas-a-pagar/buscar?pagina=1&tamanho_pagina=100',
+    '/v1/financeiro/contas-a-pagar?pagina=1&tamanho_pagina=100',
+    '/v1/financeiro/eventos-financeiros?pagina=1&tamanho_pagina=100&tipo=DESPESA',
+    '/v1/financeiro/eventos-financeiros?pagina=1&tamanho_pagina=100'
+  ]
 
-  // 2. Compras
-  try {
-    const resCompras = await fetchContaAzulApi('/v1/compras?pagina=1&tamanho_pagina=100', tokenOverride)
-    if (resCompras.ok) {
-      const data = await resCompras.json()
-      const list = data.itens || data.items || []
-      list.forEach(item => { if (item && item.id) allDespesasMap.set(item.id, item) })
+  for (const endpoint of candidateEndpoints) {
+    try {
+      const res = await fetchContaAzulApi(endpoint, tokenOverride)
+      if (res.ok) {
+        const data = await res.json()
+        const list = data.itens || data.items || data.despesas || data.contas_a_pagar || (Array.isArray(data) ? data : [])
+        if (Array.isArray(list) && list.length > 0) {
+          list.forEach(item => {
+            if (item) {
+              const itemId = item.id || item.id_evento || item.numero || `desp-${Math.random()}`
+              allDespesasMap.set(String(itemId), item)
+            }
+          })
+          console.log(`✓ Obtidos ${list.length} registros de contas a pagar via ${endpoint}`)
+
+          // Paginação se houver mais páginas
+          const totalPages = data.total_de_paginas || data.totalPages || (data.itens_totais ? Math.ceil(data.itens_totais / 100) : 1)
+          if (totalPages > 1) {
+            for (let p = 2; p <= Math.min(totalPages, 5); p++) {
+              try {
+                const nextUrl = endpoint.replace('pagina=1', `pagina=${p}`)
+                const nextRes = await fetchContaAzulApi(nextUrl, tokenOverride)
+                if (nextRes.ok) {
+                  const nextData = await nextRes.json()
+                  const nextList = nextData.itens || nextData.items || []
+                  nextList.forEach(item => {
+                    if (item) {
+                      const itemId = item.id || item.id_evento || `desp-${Math.random()}`
+                      allDespesasMap.set(String(itemId), item)
+                    }
+                  })
+                }
+              } catch (e) {
+                console.warn(`Erro na página ${p} de despesas:`, e.message)
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`Tentativa em ${endpoint} falhou:`, err.message)
     }
-  } catch (err) {}
+  }
 
   return Array.from(allDespesasMap.values())
 }
@@ -688,123 +791,192 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
     return null
   }
 
+  // 2. Mapear Vendas e Contas a Receber Reais da Conta Azul
   const mappedReceivables = []
   if (rawVendas && rawVendas.length > 0) {
-    rawVendas.forEach(v => {
-      const customerName = v.cliente?.nome || v.cliente?.razao_social || v.cliente_nome || v.contato?.nome || 'Cliente Conta Azul'
-      const saleDate =
-        extractDate(v.data_venda) ||
-        extractDate(v.data_emissao) ||
-        extractDate(v.data) ||
-        extractDate(v.data_criacao) ||
-        extractDate(v.data_compromisso) ||
-        extractDate(v.previsao_faturamento) ||
-        extractDate(v.data_faturamento) ||
-        extractDate(v.created_at)
+    rawVendas.forEach((r, idx) => {
+      const customerName =
+        r.cliente?.nome ||
+        r.cliente?.razao_social ||
+        r.cliente_nome ||
+        r.favorecido?.nome ||
+        r.favorecido ||
+        r.pessoa?.nome ||
+        r.pessoa_nome ||
+        r.contato?.nome ||
+        r.nome ||
+        r.nome_cliente ||
+        r.sacado?.nome ||
+        r.sacado ||
+        'Cliente'
 
-      const totalAmount = Number(v.total || v.valor || v.valor_total || v.valor_liquido || 0)
-      const saleStatusRaw = String(
-        (v.situacao && (v.situacao.nome || v.situacao.descricao || v.situacao)) ||
-        v.status ||
-        v.situacao_venda ||
+      const dueDate =
+        extractDate(r.data_vencimento) ||
+        extractDate(r.vencimento) ||
+        extractDate(r.due_date) ||
+        extractDate(r.data_previsao) ||
+        extractDate(r.data_venda) ||
+        extractDate(r.data) ||
+        extractDate(r.data_emissao) ||
+        extractDate(r.data_competencia) ||
+        todayStr
+
+      const receiptDate =
+        extractDate(r.data_recebimento) ||
+        extractDate(r.data_pagamento) ||
+        extractDate(r.data_baixa) ||
+        extractDate(r.data_liquidacao) ||
+        null
+
+      const rawAmount = Number(r.valor || r.total || r.valor_total || r.valor_bruto || r.valor_original || r.valor_liquido || 0)
+      let amountRemaining = Number(r.valor_em_aberto || r.saldo || r.a_receber || r.valor_pendente || r.valor_restante || 0)
+      let amountPaid = Number(r.valor_pago || r.valor_recebido || r.total_pago || r.total_recebido || 0)
+
+      const rawStatus = String(
+        r.status ||
+        r.situacao?.nome ||
+        r.situacao?.descricao ||
+        r.situacao ||
+        r.situacao_venda ||
+        r.status_financeiro ||
         ''
       ).toUpperCase()
 
-      const isCancelled = saleStatusRaw.includes('CANCELAD') || saleStatusRaw.includes('PERDID')
-      const saleHasReceipt =
-        saleStatusRaw.includes('RECEBID') ||
-        saleStatusRaw.includes('QUITAD') ||
-        saleStatusRaw.includes('ACQUITTED') ||
-        saleStatusRaw.includes('PAGO') ||
-        saleStatusRaw.includes('CONCRETIZAD') ||
-        saleStatusRaw.includes('FATURAD')
+      const isReceived =
+        rawStatus.includes('RECEBID') ||
+        rawStatus.includes('QUITAD') ||
+        rawStatus.includes('LIQUIDADO') ||
+        rawStatus.includes('PAGO') ||
+        rawStatus.includes('ACQUITTED') ||
+        rawStatus.includes('CONCRETIZAD') ||
+        rawStatus.includes('FATURAD') ||
+        Boolean(receiptDate) ||
+        (amountPaid > 0 && amountRemaining === 0)
 
-      const rawParcelas = (v.condicao_pagamento && Array.isArray(v.condicao_pagamento.parcelas) && v.condicao_pagamento.parcelas.length > 0)
-        ? v.condicao_pagamento.parcelas
-        : (Array.isArray(v.parcelas) && v.parcelas.length > 0)
-        ? v.parcelas
-        : (Array.isArray(v.parcelas_financeiras) && v.parcelas_financeiras.length > 0)
-        ? v.parcelas_financeiras
+      const isPartial =
+        rawStatus.includes('PARCIAL') ||
+        (amountPaid > 0 && amountRemaining > 0)
+
+      const isCancelled =
+        rawStatus.includes('CANCELAD') ||
+        rawStatus.includes('PERDID')
+
+      let status = 'future'
+      if (isCancelled) {
+        status = 'cancelled'
+      } else if (isReceived) {
+        status = 'received'
+        amountPaid = rawAmount
+        amountRemaining = 0
+      } else if (isPartial) {
+        status = 'partial'
+        if (amountPaid === 0 && amountRemaining > 0 && rawAmount > amountRemaining) {
+          amountPaid = rawAmount - amountRemaining
+        } else if (amountRemaining === 0 && amountPaid > 0 && rawAmount > amountPaid) {
+          amountRemaining = rawAmount - amountPaid
+        }
+      } else if (dueDate < todayStr || rawStatus.includes('ATRASAD') || rawStatus.includes('VENCID')) {
+        status = 'overdue'
+        amountRemaining = amountRemaining > 0 ? amountRemaining : rawAmount
+        amountPaid = 0
+      } else if (dueDate === todayStr) {
+        status = 'today'
+        amountRemaining = amountRemaining > 0 ? amountRemaining : rawAmount
+        amountPaid = 0
+      } else {
+        status = 'future'
+        amountRemaining = amountRemaining > 0 ? amountRemaining : rawAmount
+        amountPaid = 0
+      }
+
+      // Se o item contém parcelas internas (como vendas comerciais com múltiplas parcelas)
+      const rawParcelas = (r.condicao_pagamento && Array.isArray(r.condicao_pagamento.parcelas) && r.condicao_pagamento.parcelas.length > 0)
+        ? r.condicao_pagamento.parcelas
+        : (Array.isArray(r.parcelas) && r.parcelas.length > 0)
+        ? r.parcelas
+        : (Array.isArray(r.parcelas_financeiras) && r.parcelas_financeiras.length > 0)
+        ? r.parcelas_financeiras
         : null
 
       if (rawParcelas && rawParcelas.length > 0) {
-        rawParcelas.forEach((p, idx) => {
-          const pDate =
+        rawParcelas.forEach((p, pIdx) => {
+          const pDueDate =
             extractDate(p.data_vencimento) ||
             extractDate(p.vencimento) ||
             extractDate(p.due_date) ||
             extractDate(p.data_previsao) ||
-            extractDate(p.data_pagamento) ||
-            extractDate(p.data_recebimento) ||
-            saleDate ||
-            todayStr
+            dueDate
 
-          const pAmount = Number(p.valor || p.total || p.valor_parcela || (totalAmount / rawParcelas.length) || 0)
-          const pStatusRaw = String(
-            (p.situacao && (p.situacao.nome || p.situacao)) ||
-            p.status ||
-            p.situacao_parcela ||
-            ''
-          ).toUpperCase()
+          const pAmount = Number(p.valor || p.total || p.valor_parcela || (rawAmount / rawParcelas.length) || 0)
+          let pAmountRemaining = Number(p.valor_em_aberto || p.saldo || p.a_receber || p.valor_pendente || 0)
+          let pAmountPaid = Number(p.valor_pago || p.valor_recebido || p.total_pago || 0)
 
+          const pStatusRaw = String((p.situacao && (p.situacao.nome || p.situacao)) || p.status || '').toUpperCase()
           const pIsReceived =
             pStatusRaw.includes('RECEBID') ||
             pStatusRaw.includes('QUITAD') ||
-            pStatusRaw.includes('ACQUITTED') ||
             pStatusRaw.includes('PAGO') ||
             pStatusRaw.includes('LIQUIDADO') ||
-            Boolean(p.data_recebimento || p.data_pagamento || p.recebido || p.quitado)
+            Boolean(p.data_recebimento || p.data_pagamento)
 
-          let finalStatus = 'pending'
+          const pIsPartial = pStatusRaw.includes('PARCIAL') || (pAmountPaid > 0 && pAmountRemaining > 0)
+
+          let pStatus = 'future'
           if (pIsReceived) {
-            finalStatus = 'received'
-          } else if (isCancelled) {
-            finalStatus = 'cancelled'
-          } else if (pDate && pDate < todayStr) {
-            finalStatus = 'overdue'
+            pStatus = 'received'
+            pAmountPaid = pAmount
+            pAmountRemaining = 0
+          } else if (pIsPartial) {
+            pStatus = 'partial'
+          } else if (pDueDate < todayStr) {
+            pStatus = 'overdue'
+            pAmountRemaining = pAmountRemaining > 0 ? pAmountRemaining : pAmount
+            pAmountPaid = 0
+          } else if (pDueDate === todayStr) {
+            pStatus = 'today'
+            pAmountRemaining = pAmountRemaining > 0 ? pAmountRemaining : pAmount
+            pAmountPaid = 0
           } else {
-            finalStatus = 'pending'
+            pStatus = 'future'
+            pAmountRemaining = pAmountRemaining > 0 ? pAmountRemaining : pAmount
+            pAmountPaid = 0
           }
 
           mappedReceivables.push({
-            id: p.id || `rec-${v.id}-${idx + 1}`,
-            caReceivableId: String(p.id || v.id),
+            id: String(p.id || `rec-${r.id || idx}-${pIdx + 1}`),
+            caReceivableId: String(p.id || r.id),
             clientId: clientId,
             customer: customerName,
-            category: 'Venda de Produtos & Serviços',
-            description: `Venda ${v.numero || ''} - ${customerName}`.trim(),
+            category: r.categoria?.nome || r.categoria_nome || 'Venda de Produtos & Serviços',
+            description: `Venda ${r.numero || ''} - Parcela ${pIdx + 1}/${rawParcelas.length} - ${customerName}`.trim(),
             amount: pAmount,
-            dueDate: pDate,
-            status: finalStatus,
-            paymentMethod: 'Boleto Bancário',
-            invoiceNumber: v.numero ? `Venda #${v.numero}` : 'Venda Conta Azul'
+            amountPaid: pAmountPaid,
+            amountRemaining: pAmountRemaining,
+            dueDate: pDueDate,
+            receiptDate: receiptDate,
+            status: pStatus,
+            rawStatus: pStatusRaw || rawStatus,
+            paymentMethod: r.forma_pagamento || 'Boleto Bancário',
+            invoiceNumber: r.numero ? `Venda #${r.numero}` : 'Venda Conta Azul'
           })
         })
       } else {
-        const finalDueDate = saleDate || todayStr
-        let finalStatus = 'pending'
-        if (saleHasReceipt) {
-          finalStatus = 'received'
-        } else if (isCancelled) {
-          finalStatus = 'cancelled'
-        } else if (finalDueDate < todayStr) {
-          finalStatus = 'overdue'
-        } else {
-          finalStatus = 'pending'
-        }
-
         mappedReceivables.push({
-          id: `rec-${v.id || Math.random()}`,
-          caReceivableId: String(v.id || Math.random()),
+          id: String(r.id || `rec-${clientId}-${idx}`),
+          caReceivableId: String(r.id || Math.random()),
           clientId: clientId,
           customer: customerName,
-          category: 'Venda de Produtos & Serviços',
-          description: `Venda ${v.numero || ''} - ${customerName}`.trim(),
-          amount: totalAmount,
-          dueDate: finalDueDate,
-          status: finalStatus,
-          paymentMethod: 'Boleto Bancário',
-          invoiceNumber: v.numero ? `Venda #${v.numero}` : 'Venda Conta Azul'
+          category: r.categoria?.nome || r.categoria_nome || 'Venda de Produtos & Serviços',
+          description: r.descricao || r.historico || r.resumo || (r.numero ? `Venda #${r.numero} - ${customerName}` : `Conta a Receber - ${customerName}`),
+          amount: rawAmount,
+          amountPaid: amountPaid,
+          amountRemaining: amountRemaining,
+          dueDate: dueDate,
+          receiptDate: receiptDate,
+          status: status,
+          rawStatus: rawStatus,
+          paymentMethod: r.forma_pagamento || 'Boleto Bancário',
+          invoiceNumber: r.numero ? `Venda #${r.numero}` : (r.numero_documento || 'Conta Azul')
         })
       }
     })
@@ -814,32 +986,85 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
   const mappedPayables = []
   if (rawDespesas && rawDespesas.length > 0) {
     rawDespesas.forEach((d, idx) => {
-      const supplierName = d.fornecedor?.nome || d.fornecedor_nome || d.pessoa?.nome || d.favorecido || d.nome || 'Fornecedor'
-      const dueDate = extractDate(d.data_vencimento) || extractDate(d.vencimento) || extractDate(d.data) || extractDate(d.data_emissao) || todayStr
-      const amount = Number(d.valor || d.total || d.valor_bruto || d.valor_liquido || 0)
-      const rawStatus = String(d.status || d.situacao?.nome || d.situacao || '').toUpperCase()
-      const isPaid = rawStatus.includes('QUITAD') || rawStatus.includes('PAGO') || rawStatus.includes('ACQUITTED') || Boolean(d.data_pagamento)
+      const supplierName =
+        d.fornecedor?.nome ||
+        d.fornecedor_nome ||
+        d.favorecido?.nome ||
+        d.favorecido ||
+        d.pessoa?.nome ||
+        d.contato?.nome ||
+        d.nome ||
+        d.cliente_fornecedor?.nome ||
+        'Fornecedor'
+
+      const dueDate =
+        extractDate(d.data_vencimento) ||
+        extractDate(d.vencimento) ||
+        extractDate(d.data) ||
+        extractDate(d.data_previsao) ||
+        extractDate(d.data_competencia) ||
+        extractDate(d.data_emissao) ||
+        todayStr
+
+      const paymentDate =
+        extractDate(d.data_pagamento) ||
+        extractDate(d.data_baixa) ||
+        extractDate(d.data_liquidacao) ||
+        null
+
+      const rawAmount = Number(d.valor || d.total || d.valor_bruto || d.valor_original || d.valor_liquido || 0)
+      const amountRemaining = Number(d.valor_em_aberto || d.saldo || d.a_pagar || d.valor_pendente || 0)
+      const amountPaid = Number(d.valor_pago || d.total_pago || 0)
+
+      const rawStatus = String(
+        d.status ||
+        d.situacao?.nome ||
+        d.situacao?.descricao ||
+        d.situacao ||
+        d.status_financeiro ||
+        ''
+      ).toUpperCase()
+
+      const isPaid =
+        rawStatus.includes('QUITAD') ||
+        rawStatus.includes('PAGO') ||
+        rawStatus.includes('LIQUIDADO') ||
+        rawStatus.includes('ACQUITTED') ||
+        (amountPaid > 0 && amountRemaining === 0)
+
+      const isPartial =
+        rawStatus.includes('PARCIAL') ||
+        (amountPaid > 0 && amountRemaining > 0)
 
       let status = 'scheduled'
       if (isPaid) {
         status = 'paid'
-      } else if (dueDate < todayStr) {
+      } else if (isPartial) {
+        status = 'partial'
+      } else if (dueDate < todayStr || rawStatus.includes('ATRASAD') || rawStatus.includes('VENCID')) {
         status = 'overdue'
+      } else if (dueDate === todayStr) {
+        status = 'today'
       } else {
         status = 'scheduled'
       }
 
       mappedPayables.push({
-        id: d.id || `pay-${clientId}-${idx}`,
-        caPayableId: String(d.id || Math.random()),
+        id: String(d.id || `pay-${clientId}-${idx}`),
+        caPayableId: String(d.id || d.id_evento || Math.random()),
         clientId: clientId,
         supplier: supplierName,
-        category: d.categoria?.nome || d.categoria_nome || 'Despesas Operacionais',
-        description: d.descricao || d.historico || `Pagamento - ${supplierName}`,
-        amount: amount,
+        category: d.categoria?.nome || d.categoria_nome || d.categoria || 'Despesas Operacionais',
+        description: d.descricao || d.historico || d.resumo || d.numero_documento || `Pagamento - ${supplierName}`,
+        amount: rawAmount,
+        amountPaid: isPaid ? rawAmount : amountPaid,
+        amountRemaining: (amountRemaining > 0) ? amountRemaining : (isPaid ? 0 : rawAmount),
         dueDate: dueDate,
+        paymentDate: paymentDate,
         status: status,
-        barcode: d.codigo_barras || d.linha_digitavel || ''
+        rawStatus: rawStatus,
+        barcode: d.codigo_barras || d.linha_digitavel || d.codigo_de_barras || '',
+        costCenter: d.centro_custo?.nome || d.centro_de_custo?.nome || ''
       })
     })
   }
