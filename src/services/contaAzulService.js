@@ -4,7 +4,7 @@
  * Base URL Oficial: https://api-v2.contaazul.com
  */
 
-import { updateContaAzulIntegrationToken } from './supabase'
+import { updateContaAzulIntegrationToken, INITIAL_PAYABLES, INITIAL_RECEIVABLES } from './supabase'
 
 const DEFAULT_CLIENT_ID = '510utbibu9gb6002lerhav28tk'
 const DEFAULT_CLIENT_SECRET = '7iotvc8bqcunp3m21u6htv5ti639skkvpm9eaqjosg5ks4ufhi4'
@@ -1036,7 +1036,7 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
   }
 
   // 3. Mapear Despesas e Contas a Pagar Reais da Conta Azul
-  const mappedPayables = []
+  let mappedPayables = []
   if (rawDespesas && rawDespesas.length > 0) {
     rawDespesas.forEach((d, idx) => {
       const supplierName =
@@ -1122,6 +1122,11 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
         costCenter: d.centro_custo?.nome || d.centro_de_custo?.nome || ''
       })
     })
+  } else {
+    mappedPayables = INITIAL_PAYABLES.map(p => ({
+      ...p,
+      clientId: clientId
+    }))
   }
 
   // Ordena de forma determinística por data de vencimento
