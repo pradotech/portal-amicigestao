@@ -90,7 +90,9 @@ export function App() {
   const handleLogout = async () => {
     await signOutSupabase()
     setCurrentUser(null)
+    setSelectedClient(null)
     localStorage.removeItem('amici_user_session')
+    localStorage.removeItem('amici_selected_client_id_v4')
   }
 
   // Renovação Manual Automática (via OAuth2 Refresh Token)
@@ -261,13 +263,6 @@ export function App() {
           const supaClients = await fetchClientsFromSupabase()
           if (isMounted && supaClients && supaClients.length > 0) {
             setClients(supaClients)
-            const savedId = localStorage.getItem('amici_selected_client_id_v4')
-            const matched = savedId ? supaClients.find(c => c.id === savedId) : null
-            const defaultClient = matched || supaClients.find(c => c.tradeName?.toLowerCase().includes('drillex')) || supaClients[0]
-            if (defaultClient) {
-              setSelectedClient(defaultClient)
-              localStorage.setItem('amici_selected_client_id_v4', defaultClient.id)
-            }
           }
         } catch (err) {
           console.warn('Erro ao carregar clientes do Supabase:', err)
@@ -479,13 +474,8 @@ export function App() {
       <LoginView
         onLoginSuccess={(user) => {
           setCurrentUser(user)
-          if (!selectedClient && clients.length > 0) {
-            const defaultClient = clients.find(c => c.tradeName?.toLowerCase().includes('drillex')) || clients[0]
-            if (defaultClient) {
-              setSelectedClient(defaultClient)
-              localStorage.setItem('amici_selected_client_id_v4', defaultClient.id)
-            }
-          }
+          setSelectedClient(null)
+          localStorage.removeItem('amici_selected_client_id_v4')
         }}
         theme={theme}
         onToggleTheme={toggleTheme}
