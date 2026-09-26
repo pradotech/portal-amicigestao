@@ -12,6 +12,7 @@ import { ClientPortalView } from './views/ClientPortalView'
 import { SettingsView } from './views/SettingsView'
 import { LoginView } from './views/LoginView'
 import { RenewTokenModal } from './components/RenewTokenModal'
+import { useTheme } from './hooks/useTheme'
 import {
   getSupabaseCredentials,
   saveClientToSupabase,
@@ -45,6 +46,9 @@ import {
 import { RefreshCw } from 'lucide-react'
 
 export function App() {
+  // Hook de controle de Tema Light / Dark (Padrão: Light)
+  const { theme, toggleTheme } = useTheme()
+
   // Lista de Empresas / Clientes cadastrados no Supabase
   const [clients, setClients] = useState([])
 
@@ -258,11 +262,11 @@ export function App() {
           if (isMounted && supaClients && supaClients.length > 0) {
             setClients(supaClients)
             const savedId = localStorage.getItem('amici_selected_client_id_v4')
-            if (savedId) {
-              const matched = supaClients.find(c => c.id === savedId)
-              if (matched) {
-                setSelectedClient(matched)
-              }
+            const matched = savedId ? supaClients.find(c => c.id === savedId) : null
+            const defaultClient = matched || supaClients.find(c => c.tradeName?.toLowerCase().includes('drillex')) || supaClients[0]
+            if (defaultClient) {
+              setSelectedClient(defaultClient)
+              localStorage.setItem('amici_selected_client_id_v4', defaultClient.id)
             }
           }
         } catch (err) {
@@ -475,7 +479,16 @@ export function App() {
       <LoginView
         onLoginSuccess={(user) => {
           setCurrentUser(user)
+          if (!selectedClient && clients.length > 0) {
+            const defaultClient = clients.find(c => c.tradeName?.toLowerCase().includes('drillex')) || clients[0]
+            if (defaultClient) {
+              setSelectedClient(defaultClient)
+              localStorage.setItem('amici_selected_client_id_v4', defaultClient.id)
+            }
+          }
         }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     )
   }
@@ -493,6 +506,8 @@ export function App() {
           isSyncing={isSyncing}
           activeTokenConfig={tokenConfig}
           onLogout={handleLogout}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
         <RenewTokenModal
           isOpen={showRenewModal}
@@ -511,7 +526,9 @@ export function App() {
   // TELA 2: CLIENTE SELECIONADO (DRILLEX) -> RENDERIZA O PORTAL FINANCEIRO COMPLETO
   // ===========================================================================
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white">
+    <div className={`min-h-screen flex flex-col selection:bg-cyan-500 selection:text-white transition-colors ${
+      theme === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-slate-950 text-slate-100'
+    }`}>
       
       {/* Barra de Navegação Superior */}
       <Navbar
@@ -524,6 +541,8 @@ export function App() {
         supabaseConfigured={supabaseConfigured}
         currentUser={currentUser}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onOpenSettings={() => {
           setViewMode('bpo')
           setActiveTab('settings')
@@ -531,37 +550,41 @@ export function App() {
       />
 
       {/* Banner Informativo de Conexão com a Conta Azul */}
-      <div className={`border-b px-4 py-2 transition-all ${
-        tokenInfo.isExpired
-          ? 'bg-amber-950/40 border-amber-800/40'
-          : 'bg-gradient-to-r from-sky-950/80 via-cyan-950/80 to-slate-950 border-cyan-800/40'
+      <div className={`no-print print:hidden border-b px-4 py-2.5 transition-all ${
+        theme === 'light'
+          ? (tokenInfo.isExpired
+              ? 'bg-amber-50/90 border-amber-200 text-amber-900'
+              : 'bg-sky-50/90 border-sky-200 text-sky-950')
+          : (tokenInfo.isExpired
+              ? 'bg-amber-950/40 border-amber-800/40 text-amber-300'
+              : 'bg-gradient-to-r from-sky-950/80 via-cyan-950/80 to-slate-950 border-cyan-800/40 text-cyan-300')
       }`}>
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
           
           {tokenInfo.isExpired ? (
-            <div className="flex items-center gap-2 text-amber-300">
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
+            <div className={`flex items-center gap-2 font-medium ${theme === 'light' ? 'text-amber-900' : 'text-amber-300'}`}>
+              <span className="w-2 h-2 rounded-full bg-amber-500 shadow-sm" />
               <span>
                 <strong>Sessão Conta Azul Expirada (1 hora):</strong> Exibindo dados consolidados e seguros do <strong>Supabase</strong> ({selectedClient.tradeName}).
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-cyan-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <div className={`flex items-center gap-2 font-medium ${theme === 'light' ? 'text-sky-900' : 'text-cyan-300'}`}>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>
                 <strong>Conta Azul Conectada ({selectedClient.tradeName}):</strong> Empresa #{tokenConfig.companyId} • <em>{tokenConfig.userEmail}</em> {tokenInfo.expiresAt && `(Ativo até ${tokenInfo.expiresAt})`}
               </span>
             </div>
           )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {tokenInfo.isExpired ? (
               <>
                 <button
                   type="button"
                   onClick={handleManualAutoRenew}
                   disabled={isRenewingToken}
-                  className="text-[11px] px-3.5 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-950/40 transition-all active:scale-95 disabled:opacity-50"
+                  className="text-[11px] px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-950/20 transition-all active:scale-95 disabled:opacity-50"
                   title="Renovar token imediatamente utilizando OAuth2 Refresh Token"
                 >
                   <RefreshCw className={`w-3 h-3 ${isRenewingToken ? 'animate-spin' : ''}`} />
@@ -570,7 +593,11 @@ export function App() {
                 <button
                   type="button"
                   onClick={() => setShowRenewModal(true)}
-                  className="text-[11px] px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-amber-800/40 font-semibold flex items-center gap-1.5 transition-all"
+                  className={`text-[11px] px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all shadow-sm ${
+                    theme === 'light'
+                      ? 'bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300'
+                      : 'bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-amber-800/40'
+                  }`}
                 >
                   <span>Colar Token (Manual)</span>
                 </button>
@@ -580,7 +607,9 @@ export function App() {
                     setViewMode('bpo')
                     setActiveTab('settings')
                   }}
-                  className="text-[11px] text-slate-400 hover:text-slate-200 underline font-semibold"
+                  className={`text-[11px] underline font-semibold transition-colors ${
+                    theme === 'light' ? 'text-amber-800 hover:text-amber-950' : 'text-slate-400 hover:text-slate-200'
+                  }`}
                 >
                   Configurações
                 </button>
@@ -590,13 +619,14 @@ export function App() {
                 type="button"
                 onClick={handleSyncApi}
                 disabled={isSyncing}
-                className="text-[11px] text-cyan-400 hover:text-cyan-200 underline font-semibold flex items-center gap-1"
+                className={`text-[11px] font-semibold flex items-center gap-1 underline ${
+                  theme === 'light' ? 'text-sky-700 hover:text-sky-900' : 'text-cyan-400 hover:text-cyan-200'
+                }`}
               >
                 {isSyncing ? 'Sincronizando...' : 'Atualizar Dados da API Agora'}
               </button>
             )}
           </div>
-
         </div>
       </div>
 
@@ -619,6 +649,8 @@ export function App() {
             counts={counts}
             clientName={selectedClient.tradeName}
             onBackToLanding={handleBackToLanding}
+            theme={theme}
+            onToggleTheme={toggleTheme}
           />
         )}
 

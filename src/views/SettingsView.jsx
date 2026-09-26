@@ -3,9 +3,6 @@ import {
   Settings,
   Database,
   Zap,
-  Code2,
-  Copy,
-  Check,
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
@@ -31,7 +28,6 @@ export function SettingsView({ onResetDemoData }) {
   const [isTestingSupabase, setIsTestingSupabase] = useState(false)
   const [isRenewingToken, setIsRenewingToken] = useState(false)
   const [supabaseStatus, setSupabaseStatus] = useState(null)
-  const [copiedSql, setCopiedSql] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [showRenewModal, setShowRenewModal] = useState(false)
 
@@ -77,53 +73,6 @@ export function SettingsView({ onResetDemoData }) {
     setSupabaseStatus(res)
   }
 
-  const sqlSchemaSnippet = `-- AMICI GESTÃO FINANCEIRA - SCRIPT DE CRIAÇÃO SUPABASE
-CREATE TABLE IF NOT EXISTS public.clients (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    corporate_name VARCHAR(255) NOT NULL,
-    trade_name VARCHAR(255) NOT NULL,
-    cnpj VARCHAR(20) UNIQUE NOT NULL,
-    email VARCHAR(255),
-    phone VARCHAR(30),
-    segment VARCHAR(100),
-    tax_regime VARCHAR(50) DEFAULT 'Simples Nacional',
-    financial_analyst VARCHAR(100) DEFAULT 'Equipe Amici',
-    monthly_fee NUMERIC(10,2) DEFAULT 0.00,
-    status VARCHAR(20) DEFAULT 'active',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS public.conta_azul_integrations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE UNIQUE NOT NULL,
-    ca_client_id VARCHAR(255),
-    ca_client_secret VARCHAR(255),
-    access_token TEXT,
-    refresh_token TEXT,
-    token_expires_at TIMESTAMP WITH TIME ZONE,
-    connection_status VARCHAR(50) DEFAULT 'connected',
-    last_sync_at TIMESTAMP WITH TIME ZONE
-);
-
-CREATE TABLE IF NOT EXISTS public.payables (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE NOT NULL,
-    description VARCHAR(255) NOT NULL,
-    supplier_name VARCHAR(255) NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    amount NUMERIC(15,2) NOT NULL,
-    due_date DATE NOT NULL,
-    status VARCHAR(30) DEFAULT 'scheduled',
-    barcode TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);`
-
-  const handleCopySql = () => {
-    navigator.clipboard.writeText(sqlSchemaSnippet)
-    setCopiedSql(true)
-    setTimeout(() => setCopiedSql(false), 2000)
-  }
-
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
@@ -135,7 +84,7 @@ CREATE TABLE IF NOT EXISTS public.payables (
             <span>Configurações & Conexões do Portal</span>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Parâmetros do banco de dados Supabase, credenciais da API Conta Azul e esquema SQL.
+            Parâmetros de conexão do banco de dados Supabase e credenciais da API Conta Azul.
           </p>
         </div>
 
@@ -343,34 +292,6 @@ CREATE TABLE IF NOT EXISTS public.payables (
         </div>
 
       </form>
-
-      {/* Bloco 3: Script SQL Supabase para Copiar */}
-      <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-sky-500/10 text-sky-400">
-              <Code2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white tracking-tight">Script SQL de Inicialização (Supabase)</h2>
-              <p className="text-xs text-slate-400">Execute este script no SQL Editor do Supabase para criar todas as tabelas</p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleCopySql}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 transition-colors"
-          >
-            {copiedSql ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-cyan-400" />}
-            <span>{copiedSql ? 'Copiado!' : 'Copiar SQL'}</span>
-          </button>
-        </div>
-
-        <pre className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-slate-300 font-mono text-xs overflow-x-auto max-h-60">
-          {sqlSchemaSnippet}
-        </pre>
-      </div>
 
       {/* Modal de Renovação de Token */}
       <RenewTokenModal

@@ -1,9 +1,11 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --primary-900: #081B33;
-    --primary-800: #0C2340;
+    --primary-800: #0A2540;
     --primary-700: #133966;
     --primary-600: #1D4E89;
     --primary-500: #0077B6;
@@ -15,9 +17,393 @@
   }
 
   body {
-    @apply bg-slate-900 text-slate-100 font-sans antialiased min-h-screen selection:bg-sky-500 selection:text-white;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
+}
+
+/* ========================================================================= */
+/* TEMA LIGHT (PADRÃO AMICI)                                                */
+/* ========================================================================= */
+html.light body,
+html:not(.dark) body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* Fundo Geral */
+html.light .bg-slate-950,
+html:not(.dark) .bg-slate-950 {
+  background-color: #f8fafc !important;
+}
+
+/* Header / Navbar */
+html.light header,
+html:not(.dark) header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-bottom-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+/* Sidebar */
+html.light aside,
+html:not(.dark) aside {
+  background-color: #ffffff !important;
+  border-right-color: #e2e8f0 !important;
+}
+
+/* Menu de Navegação da Sidebar (Light Mode) */
+html.light aside nav button,
+html:not(.dark) aside nav button {
+  outline: none !important;
+}
+
+html.light aside nav button:focus,
+html.light aside nav button:focus-visible,
+html:not(.dark) aside nav button:focus,
+html:not(.dark) aside nav button:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Cards e Superfícies Gerais */
+html.light .bg-slate-900,
+html.light .bg-slate-900\/80,
+html.light .bg-slate-900\/90,
+html.light .bg-slate-900\/95,
+html.light .bg-slate-950\/60,
+html.light .bg-slate-950\/80,
+html.light .bg-slate-950\/40,
+html.light .bg-slate-900\/60,
+html.light .bg-slate-900\/40,
+html:not(.dark) .bg-slate-900,
+html:not(.dark) .bg-slate-900\/80,
+html:not(.dark) .bg-slate-900\/90,
+html:not(.dark) .bg-slate-900\/95,
+html:not(.dark) .bg-slate-950\/60,
+html:not(.dark) .bg-slate-950\/80,
+html:not(.dark) .bg-slate-950\/40,
+html:not(.dark) .bg-slate-900\/60,
+html:not(.dark) .bg-slate-900\/40 {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-slate-800,
+html.light .bg-slate-800\/80,
+html.light .bg-slate-800\/90,
+html.light .bg-slate-800\/60,
+html.light .bg-slate-800\/40,
+html:not(.dark) .bg-slate-800,
+html:not(.dark) .bg-slate-800\/80,
+html:not(.dark) .bg-slate-800\/90,
+html:not(.dark) .bg-slate-800\/60,
+html:not(.dark) .bg-slate-800\/40 {
+  background-color: #f1f5f9 !important;
+}
+
+/* Bordas em Light Mode */
+html.light .border-slate-800,
+html.light .border-slate-800\/80,
+html.light .border-slate-800\/60,
+html.light .border-slate-800\/90,
+html.light .border-slate-700,
+html.light .border-slate-700\/80,
+html.light .border-slate-700\/60,
+html:not(.dark) .border-slate-800,
+html:not(.dark) .border-slate-800\/80,
+html:not(.dark) .border-slate-800\/60,
+html:not(.dark) .border-slate-800\/90,
+html:not(.dark) .border-slate-700,
+html:not(.dark) .border-slate-700\/80,
+html:not(.dark) .border-slate-700\/60 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Gradientes de Destaque no Light Mode */
+html.light .bg-gradient-to-br.from-slate-900,
+html.light .bg-gradient-to-r.from-slate-900,
+html:not(.dark) .bg-gradient-to-br.from-slate-900,
+html:not(.dark) .bg-gradient-to-r.from-slate-900 {
+  background-image: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 119, 182, 0.06), 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light .bg-emerald-950\/20,
+html:not(.dark) .bg-emerald-950\/20 {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+}
+
+html.light .bg-cyan-950\/20,
+html.light .bg-cyan-950\/30,
+html.light .bg-cyan-950\/40,
+html:not(.dark) .bg-cyan-950\/20,
+html:not(.dark) .bg-cyan-950\/30,
+html:not(.dark) .bg-cyan-950\/40 {
+  background-color: #f0f9ff !important;
+  border-color: #bae6fd !important;
+}
+
+html.light .bg-rose-950\/20,
+html:not(.dark) .bg-rose-950\/20 {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+}
+
+/* ========================================================================= */
+/* CORES DE TEXTO GLOBAIS NO MODO CLARO (NADA INVISÍVEL)                     */
+/* ========================================================================= */
+html.light h1,
+html.light h2,
+html.light h3,
+html.light h4,
+html.light h5,
+html.light h6,
+html:not(.dark) h1,
+html:not(.dark) h2,
+html:not(.dark) h3,
+html:not(.dark) h4,
+html:not(.dark) h5,
+html:not(.dark) h6 {
+  color: #0a2540 !important;
+}
+
+html.light .text-white,
+html.light .text-slate-100,
+html:not(.dark) .text-white,
+html:not(.dark) .text-slate-100 {
+  color: #0a2540 !important;
+}
+
+html.light .text-slate-200,
+html.light .text-slate-300,
+html:not(.dark) .text-slate-200,
+html:not(.dark) .text-slate-300 {
+  color: #1e293b !important;
+}
+
+html.light .text-slate-400,
+html.light .text-slate-500,
+html:not(.dark) .text-slate-400,
+html:not(.dark) .text-slate-500 {
+  color: #475569 !important;
+}
+
+/* ========================================================================= */
+/* BOTÕES E ELEMENTOS COM FUNDO COLORIDO ESCURO (PRESERVAR TEXTO BRANCO)    */
+/* ========================================================================= */
+html.light .bg-gradient-to-r.from-sky-600,
+html.light .bg-gradient-to-r.from-sky-600 *,
+html.light .bg-gradient-to-r.from-emerald-600,
+html.light .bg-gradient-to-r.from-emerald-600 *,
+html.light button.bg-sky-600,
+html.light button.bg-sky-600 *,
+html.light button.bg-cyan-600,
+html.light button.bg-cyan-600 *,
+html.light button.bg-emerald-600,
+html.light button.bg-emerald-600 *,
+html.light button.bg-teal-600,
+html.light button.bg-teal-600 *,
+html.light button.bg-rose-600,
+html.light button.bg-rose-600 *,
+html.light button.bg-blue-600,
+html.light button.bg-blue-600 *,
+html.light aside .w-9.h-9,
+html.light aside .w-9.h-9 *,
+html:not(.dark) .bg-gradient-to-r.from-sky-600,
+html:not(.dark) .bg-gradient-to-r.from-sky-600 *,
+html:not(.dark) .bg-gradient-to-r.from-emerald-600,
+html:not(.dark) .bg-gradient-to-r.from-emerald-600 *,
+html:not(.dark) button.bg-sky-600,
+html:not(.dark) button.bg-sky-600 *,
+html:not(.dark) button.bg-cyan-600,
+html:not(.dark) button.bg-cyan-600 *,
+html:not(.dark) button.bg-emerald-600,
+html:not(.dark) button.bg-emerald-600 *,
+html:not(.dark) button.bg-teal-600,
+html:not(.dark) button.bg-teal-600 *,
+html:not(.dark) button.bg-rose-600,
+html:not(.dark) button.bg-rose-600 *,
+html:not(.dark) button.bg-blue-600,
+html:not(.dark) button.bg-blue-600 *,
+html:not(.dark) aside .w-9.h-9,
+html:not(.dark) aside .w-9.h-9 * {
+  color: #ffffff !important;
+}
+
+/* ========================================================================= */
+/* SIDEBAR NAVEGAÇÃO (LIGHT MODE)                                            */
+/* ========================================================================= */
+html.light aside nav button,
+html.light aside nav button span,
+html.light aside nav button svg,
+html:not(.dark) aside nav button,
+html:not(.dark) aside nav button span,
+html:not(.dark) aside nav button svg {
+  color: #475569 !important;
+}
+
+html.light aside nav button:hover,
+html.light aside nav button:hover span,
+html:not(.dark) aside nav button:hover,
+html:not(.dark) aside nav button:hover span {
+  color: #0a2540 !important;
+  background-color: #f1f5f9 !important;
+}
+
+html.light aside nav button.bg-sky-50,
+html.light aside nav button.bg-sky-50 span,
+html.light aside nav button.bg-sky-50 svg,
+html:not(.dark) aside nav button.bg-sky-50,
+html:not(.dark) aside nav button.bg-sky-50 span,
+html:not(.dark) aside nav button.bg-sky-50 svg {
+  color: #0077b6 !important;
+  background-color: #f0f9ff !important;
+}
+
+/* ========================================================================= */
+/* BADGES DE STATUS (LIGHT MODE)                                             */
+/* ========================================================================= */
+html.light .bg-emerald-500\/10,
+html.light .bg-emerald-500\/20,
+html.light .bg-emerald-50,
+html:not(.dark) .bg-emerald-500\/10,
+html:not(.dark) .bg-emerald-500\/20,
+html:not(.dark) .bg-emerald-50 {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #047857 !important;
+}
+html.light .bg-emerald-500\/10 *,
+html.light .bg-emerald-500\/20 *,
+html.light .bg-emerald-50 *,
+html:not(.dark) .bg-emerald-500\/10 *,
+html:not(.dark) .bg-emerald-500\/20 *,
+html:not(.dark) .bg-emerald-50 * {
+  color: #047857 !important;
+}
+
+html.light .bg-amber-500\/10,
+html.light .bg-amber-500\/20,
+html.light .bg-amber-50,
+html:not(.dark) .bg-amber-500\/10,
+html:not(.dark) .bg-amber-500\/20,
+html:not(.dark) .bg-amber-50 {
+  background-color: #fffbeb !important;
+  border-color: #fde68a !important;
+  color: #b45309 !important;
+}
+html.light .bg-amber-500\/10 *,
+html.light .bg-amber-500\/20 *,
+html.light .bg-amber-50 *,
+html:not(.dark) .bg-amber-500\/10 *,
+html:not(.dark) .bg-amber-500\/20 *,
+html:not(.dark) .bg-amber-50 * {
+  color: #b45309 !important;
+}
+
+html.light .bg-rose-500\/10,
+html.light .bg-rose-500\/20,
+html.light .bg-rose-50,
+html:not(.dark) .bg-rose-500\/10,
+html:not(.dark) .bg-rose-500\/20,
+html:not(.dark) .bg-rose-50 {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+  color: #be123c !important;
+}
+html.light .bg-rose-500\/10 *,
+html.light .bg-rose-500\/20 *,
+html.light .bg-rose-50 *,
+html:not(.dark) .bg-rose-500\/10 *,
+html:not(.dark) .bg-rose-500\/20 *,
+html:not(.dark) .bg-rose-50 * {
+  color: #be123c !important;
+}
+
+html.light .bg-cyan-500\/10,
+html.light .bg-cyan-500\/20,
+html.light .bg-sky-500\/10,
+html.light .bg-sky-500\/20,
+html.light .bg-sky-50,
+html:not(.dark) .bg-cyan-500\/10,
+html:not(.dark) .bg-cyan-500\/20,
+html:not(.dark) .bg-sky-500\/10,
+html:not(.dark) .bg-sky-500\/20,
+html:not(.dark) .bg-sky-50 {
+  background-color: #f0f9ff !important;
+  border-color: #bae6fd !important;
+  color: #0284c7 !important;
+}
+html.light .bg-cyan-500\/10 *,
+html.light .bg-cyan-500\/20 *,
+html.light .bg-sky-500\/10 *,
+html.light .bg-sky-500\/20 *,
+html.light .bg-sky-50 *,
+html:not(.dark) .bg-cyan-500\/10 *,
+html:not(.dark) .bg-cyan-500\/20 *,
+html:not(.dark) .bg-sky-500\/10 *,
+html:not(.dark) .bg-sky-500\/20 *,
+html:not(.dark) .bg-sky-50 * {
+  color: #0284c7 !important;
+}
+
+/* ========================================================================= */
+/* TABELAS E INPUTS (LIGHT MODE)                                            */
+/* ========================================================================= */
+html.light input,
+html.light select,
+html.light textarea,
+html:not(.dark) input,
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0a2540 !important;
+}
+
+html.light select option,
+html:not(.dark) select option {
+  background-color: #ffffff !important;
+  color: #0a2540 !important;
+}
+
+html.light thead,
+html.light thead tr,
+html:not(.dark) thead,
+html:not(.dark) thead tr {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light thead th,
+html:not(.dark) thead th {
+  color: #475569 !important;
+}
+
+html.light tbody tr,
+html:not(.dark) tbody tr {
+  background-color: #ffffff !important;
+  border-color: #f1f5f9 !important;
+}
+
+html.light tbody tr:hover,
+html:not(.dark) tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+html.light tbody td,
+html:not(.dark) tbody td {
+  color: #1e293b !important;
+}
+
+/* ========================================================================= */
+/* TEMA DARK (NOITE AMICI)                                                  */
+/* ========================================================================= */
+html.dark body {
+  background-color: #090d16;
+  color: #f8fafc;
 }
 
 /* Custom Scrollbars */
@@ -26,17 +412,29 @@
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
-  background: #0f172a;
+html.light ::-webkit-scrollbar-track,
+html:not(.dark) ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+html.light ::-webkit-scrollbar-thumb,
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+html.light ::-webkit-scrollbar-thumb:hover,
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-::-webkit-scrollbar-thumb {
+html.dark ::-webkit-scrollbar-track {
+  background: #090d16;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 6px;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
   background: #334155;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
 }
 
 /* Custom Animations */
@@ -49,14 +447,50 @@
   animation: pulseGlow 4s ease-in-out infinite;
 }
 
+/* Glass Panels & Cards */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .glass-card {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Utilities */
+.table-row-hover {
+  transition: all 0.15s ease-in-out;
+}
+
+/* ========================================================================= */
+/* REGRAS DE IMPRESSÃO / PDF (OCULTAR ELEMENTOS OPERACIONAIS DO SISTEMA)    */
+/* ========================================================================= */
+@media print {
+  header,
+  nav,
+  aside,
+  .no-print,
+  [role="banner"],
+  button,
+  input,
+  select,
+  .fixed,
+  .absolute {
+    display: none !important;
+  }
+
+  body, html {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 }

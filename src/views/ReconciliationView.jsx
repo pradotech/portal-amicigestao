@@ -68,8 +68,29 @@ export function ReconciliationView({
         )}
       </div>
 
+      {/* Cards de Resumo da Conciliação */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total de Transações</span>
+          <div className="text-2xl font-black text-white mt-1.5 font-mono">{transactions.length}</div>
+          <div className="text-[11px] text-slate-500 mt-1">Lançamentos importados do extrato</div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-rose-500/30 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400">Pendências de Conciliação</span>
+          <div className="text-2xl font-black text-rose-400 mt-1.5 font-mono">{pendingCount}</div>
+          <div className="text-[11px] text-slate-400 mt-1">Aguardando confirmação do analista</div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-emerald-500/30 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">100% Conciliadas</span>
+          <div className="text-2xl font-black text-emerald-400 mt-1.5 font-mono">{transactions.length - pendingCount}</div>
+          <div className="text-[11px] text-slate-400 mt-1">Integradas com a Conta Azul</div>
+        </div>
+      </div>
+
       {/* Barra de Filtros */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="flex items-center gap-1.5">
             {[
@@ -81,10 +102,10 @@ export function ReconciliationView({
                 key={tab.id}
                 type="button"
                 onClick={() => setFilterReconciled(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   filterReconciled === tab.id
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-transparent'
                 }`}
               >
                 {tab.label}
@@ -93,7 +114,7 @@ export function ReconciliationView({
           </div>
         </div>
 
-        <div className="text-xs text-slate-400">
+        <div className="text-xs text-slate-400 font-mono">
           Mostrando {filteredTransactions.length} transações
         </div>
       </div>

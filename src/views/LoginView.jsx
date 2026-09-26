@@ -6,11 +6,13 @@ import {
   ArrowRight,
   ShieldCheck,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Sun,
+  Moon
 } from 'lucide-react'
 import { signInWithSupabase, getSupabaseCredentials } from '../services/supabase'
 
-export function LoginView({ onLoginSuccess }) {
+export function LoginView({ onLoginSuccess, theme = 'light', onToggleTheme }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(true)
@@ -52,6 +54,29 @@ export function LoginView({ onLoginSuccess }) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 sm:p-6 relative overflow-hidden selection:bg-cyan-500 selection:text-white">
       
+      {/* Botão de Alternância de Tema no Topo Direito */}
+      {onToggleTheme && (
+        <div className="absolute top-6 right-6 z-20">
+          <button
+            onClick={onToggleTheme}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700/60 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/40 backdrop-blur-md transition-all text-xs font-semibold shadow-lg"
+            title={`Alternar para tema ${theme === 'light' ? 'Escuro (Dark)' : 'Claro (Light)'}`}
+          >
+            {theme === 'light' ? (
+              <>
+                <Moon className="w-4 h-4 text-cyan-600" />
+                <span>Modo Escuro</span>
+              </>
+            ) : (
+              <>
+                <Sun className="w-4 h-4 text-amber-400" />
+                <span>Modo Claro</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Luzes e Efeitos de Fundo */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -63,7 +88,7 @@ export function LoginView({ onLoginSuccess }) {
         {/* Cabeçalho com Logo Amici */}
         <div className="text-center space-y-2">
           <div className="inline-block mx-auto mb-2">
-            <AmiciLogo className="h-12 mx-auto" />
+            <AmiciLogo variant={theme === 'dark' ? 'dark' : 'light'} className="h-12 mx-auto" />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
             Portal Financeiro & BPO

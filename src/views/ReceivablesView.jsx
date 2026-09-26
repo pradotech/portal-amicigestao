@@ -140,25 +140,42 @@ export function ReceivablesView({
       </div>
 
       {/* Cards de Métricas de Recebíveis */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Previsto</span>
-          <div className="text-2xl font-bold text-white mt-2 font-mono">{formatCurrency(totalAmount)}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Faturamento Previsto</span>
+          <div className="text-2xl font-black text-white mt-1.5 font-mono">{formatCurrency(totalAmount)}</div>
+          <div className="text-[11px] text-slate-500 mt-1">{filteredReceivables.length} títulos no período</div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">Total Liquidado (Recebido)</span>
-          <div className="text-2xl font-bold text-emerald-400 mt-2 font-mono">{formatCurrency(receivedAmount)}</div>
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-cyan-500/30 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">A Vencer / Previsto</span>
+          <div className="text-2xl font-black text-cyan-300 mt-1.5 font-mono">
+            {formatCurrency(filteredReceivables.filter(r => !isReceived(r) && !isOverdue(r)).reduce((acc, r) => acc + getReceivableRemaining(r), 0))}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {filteredReceivables.filter(r => !isReceived(r) && !isOverdue(r)).length} títulos no prazo
+          </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
-          <span className="text-xs font-semibold uppercase tracking-wider text-rose-400">Em Atraso (Inadimplência)</span>
-          <div className="text-2xl font-bold text-rose-400 mt-2 font-mono">{formatCurrency(overdueAmount)}</div>
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-rose-500/30 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400">Em Atraso (Inadimplência)</span>
+          <div className="text-2xl font-black text-rose-400 mt-1.5 font-mono">{formatCurrency(overdueAmount)}</div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {filteredReceivables.filter(r => isOverdue(r)).length} títulos vencidos
+          </div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-emerald-500/30 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Total Liquidado (Recebido)</span>
+          <div className="text-2xl font-black text-emerald-400 mt-1.5 font-mono">{formatCurrency(receivedAmount)}</div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {filteredReceivables.filter(r => isReceived(r)).length} títulos recebidos
+          </div>
         </div>
       </div>
 
       {/* Filtros e Busca */}
-      <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
+      <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3 shadow-md">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="relative w-full md:w-96">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -167,14 +184,14 @@ export function ReceivablesView({
               placeholder="Buscar por cliente sacado, nota fiscal ou descrição..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
             />
           </div>
 
-          <div className="flex items-center gap-1.5 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
             {[
               { id: 'all', label: 'Todos' },
-              { id: 'pending', label: 'Previstos / Pendentes' },
+              { id: 'pending', label: 'Previstos / No Prazo' },
               { id: 'overdue', label: 'Vencidos' },
               { id: 'received', label: 'Recebidos' }
             ].map(tab => (
@@ -182,16 +199,21 @@ export function ReceivablesView({
                 key={tab.id}
                 type="button"
                 onClick={() => setFilterStatus(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   filterStatus === tab.id
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-transparent'
                 }`}
               >
                 {tab.label}
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60 font-mono">
+          <span>{filteredReceivables.length} títulos listados</span>
+          <span>Total Filtrado: <strong className="text-white text-sm">{formatCurrency(totalAmount)}</strong></span>
         </div>
       </div>
 

@@ -18,7 +18,12 @@ import {
   CalendarDays,
   RotateCcw,
   Sparkles,
-  PieChart as PieIcon
+  PieChart as PieIcon,
+  Copy,
+  Check,
+  CalendarClock,
+  Receipt,
+  ExternalLink
 } from 'lucide-react'
 import {
   AreaChart,
@@ -155,6 +160,41 @@ export function DashboardView({
     ? (currentClient?.pendingReconciliations || 0)
     : clients.reduce((acc, c) => acc + (c.pendingReconciliations || 0), 0)
 
+  // =========================================================================
+  // VENCIMENTOS DE HOJE (RECEITAS E DESPESAS DO DIA ATUAL)
+  // =========================================================================
+  const [copiedBarcodeId, setCopiedBarcodeId] = useState(null)
+
+  const handleCopyBarcode = (barcode, id) => {
+    if (!barcode) return
+    navigator.clipboard.writeText(barcode.replace(/\s+/g, ''))
+    setCopiedBarcodeId(id)
+    setTimeout(() => setCopiedBarcodeId(null), 2000)
+  }
+
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  // Despesas que vencem hoje
+  const todayPayables = basePayables.filter(p => {
+    const d = p.dueDate || p.due_date
+    return d === todayStr || p.status === 'today'
+  })
+  const todayPayablesAmount = todayPayables.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  const todayPayablesPaidAmount = todayPayables.reduce((acc, p) => acc + getPayablePaid(p), 0)
+  const todayPayablesPendingAmount = todayPayables.filter(p => !isPaidPayable(p)).reduce((acc, p) => acc + getPayableRemaining(p), 0)
+
+  // Receitas que vencem hoje
+  const todayReceivables = baseReceivables.filter(r => {
+    const d = r.dueDate || r.due_date
+    return d === todayStr || r.status === 'today'
+  })
+  const todayReceivablesAmount = todayReceivables.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+  const todayReceivablesReceivedAmount = todayReceivables.reduce((acc, r) => acc + getReceivableReceived(r), 0)
+  const todayReceivablesPendingAmount = todayReceivables.filter(r => !isReceivedRec(r)).reduce((acc, r) => acc + getReceivableRemaining(r), 0)
+
+  // Saldo projetado do dia
+  const todayNetBalance = todayReceivablesAmount - todayPayablesAmount
+
   // Gráfico de Fluxo de Caixa Dinâmico baseado exclusivamente nos lançamentos reais do banco
   const chartData = React.useMemo(() => {
     const dateMap = {}
@@ -188,35 +228,24 @@ export function DashboardView({
     <div className="space-y-6 animate-in fade-in duration-300">
       
       {/* Banner Superior com Contexto */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-sky-950/40 to-slate-900 border border-slate-800 shadow-xl relative overflow-hidden">
-        <div className="relative z-10">
-          <div className="flex items-center gap-2.5 text-xs font-semibold uppercase tracking-wider text-cyan-400 mb-1">
-            <Zap className="w-4 h-4" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900/95 to-cyan-950/30 border border-slate-800 shadow-xl relative overflow-hidden">
+        <div className="relative z-10 space-y-1">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-400">
+            <Zap className="w-3.5 h-3.5" />
             <span>{selectedClientId ? `Empresa: ${currentClient?.tradeName}` : 'Visão Consolidada Amici BPO'}</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             {selectedClientId ? currentClient?.corporateName : 'Central de Gestão Financeira'}
           </h1>
-          <p className="text-sm text-slate-400 mt-1 max-w-2xl">
+          <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
             {selectedClientId
               ? `Analista Responsável: ${currentClient?.financialAnalyst} • Regime: ${currentClient?.taxRegime}`
-              : `Monitoramento em tempo real com integração ativa na Conta Azul.`}
+              : `Monitoramento executivo em tempo real com integração ativa na Conta Azul.`}
           </p>
         </div>
 
-        <div className="flex items-center gap-3 relative z-10">
-          <button
-            type="button"
-            onClick={() => onNavigateTab('suppliers')}
-            className="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-all shadow-lg shadow-cyan-900/30 flex items-center gap-2"
-          >
-            <CreditCard className="w-4 h-4" />
-            <span>Gerar Borderô do Dia</span>
-          </button>
-        </div>
-
         {/* Glow decorativo de fundo */}
-        <div className="absolute right-0 top-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute right-0 top-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
       </div>
 
       {/* BARRA DE FILTRO DE PERÍODO (POR MÊS, POR DIA, INTERVALO DE ... ATÉ ...) */}
@@ -371,7 +400,12 @@ export function DashboardView({
           </div>
           <div className="flex items-center justify-between text-xs text-slate-400 mt-2">
             <span>{pendingPayablesCount} a pagar ({formatCurrency(pendingPayablesAmount)})</span>
-            {overduePayablesCount > 0 ? (
+            {todayPayables.length > 0 ? (
+              <span className="text-amber-400 font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                {todayPayables.length} vence hoje
+              </span>
+            ) : overduePayablesCount > 0 ? (
               <span className="text-rose-400 font-semibold">{overduePayablesCount} em atraso</span>
             ) : (
               <span className="text-emerald-400 font-medium">{paidPayablesCount} pagos</span>
@@ -395,7 +429,11 @@ export function DashboardView({
           </div>
           <div className="flex items-center justify-between text-xs text-slate-400 mt-2">
             <span className="text-cyan-400 font-medium">{liquidityRate}% liquidado</span>
-            <span>{pendingReceivables.length} a receber</span>
+            {todayReceivables.length > 0 ? (
+              <span className="text-emerald-400 font-semibold">{todayReceivables.length} vence hoje</span>
+            ) : (
+              <span>{pendingReceivables.length} a receber</span>
+            )}
           </div>
         </div>
 
@@ -418,6 +456,220 @@ export function DashboardView({
           </div>
         </div>
 
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SEÇÃO EXECUTIVA: AGENDA DO DIA • VENCIMENTOS DE HOJE                      */}
+      {/* ========================================================================= */}
+      <div className="p-6 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800 shadow-2xl space-y-5">
+        
+        {/* Header da Agenda de Hoje */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/80">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shadow-inner">
+              <CalendarClock className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-white tracking-tight">
+                  Vencimentos de Hoje
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                  {formatDate(todayStr)}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Receitas previstas e compromissos financeiros a liquidar com vencimento na data de hoje.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            <div className="px-3.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs flex items-center gap-2">
+              <span className="text-slate-400">Saldo Previsto do Dia:</span>
+              <strong className={`font-mono font-bold ${todayNetBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {formatCurrency(todayNetBalance)}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Grid de 2 Cards: Receitas de Hoje vs Despesas de Hoje */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          
+          {/* Card 1: RECEITAS QUE VENCEM HOJE */}
+          <div className="p-5 rounded-2xl bg-slate-950/60 border border-emerald-500/20 hover:border-emerald-500/40 transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-400">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>Receitas que Vencem Hoje</span>
+                </div>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                  {todayReceivables.length} {todayReceivables.length === 1 ? 'título' : 'títulos'}
+                </span>
+              </div>
+
+              <div className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-mono mb-2">
+                {formatCurrency(todayReceivablesAmount)}
+              </div>
+
+              {todayReceivables.length > 0 ? (
+                <div className="space-y-2 mt-4">
+                  {todayReceivables.map(rec => (
+                    <div
+                      key={rec.id}
+                      className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between hover:bg-slate-800/40 transition-colors"
+                    >
+                      <div className="truncate pr-2">
+                        <div className="text-xs font-semibold text-white truncate">{rec.customer}</div>
+                        <div className="text-[11px] text-slate-400 truncate">{rec.description}</div>
+                        {rec.invoiceNumber && (
+                          <span className="text-[10px] text-cyan-400 font-mono">{rec.invoiceNumber}</span>
+                        )}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-xs font-bold text-emerald-400 font-mono">{formatCurrency(rec.amount)}</div>
+                        <span className={`inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-medium border ${
+                          isReceivedRec(rec)
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                        }`}>
+                          {isReceivedRec(rec) ? 'Recebido' : 'A Vencer Hoje'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6 px-4 text-center rounded-xl bg-slate-900/40 border border-dashed border-slate-800 text-slate-400 text-xs mt-3">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500/60 mx-auto mb-1.5" />
+                  <p className="font-medium text-slate-300">Nenhuma receita com vencimento para hoje</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Todos os recebimentos estão programados para outras datas.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <span className="text-slate-400">
+                {todayReceivablesReceivedAmount > 0
+                  ? `Liquidado hoje: ${formatCurrency(todayReceivablesReceivedAmount)}`
+                  : `Pendente de recebimento: ${formatCurrency(todayReceivablesPendingAmount)}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('customers')}
+                className="text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 group"
+              >
+                <span>Ver Contas a Receber</span>
+                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: DESPESAS QUE VENCEM HOJE */}
+          <div className="p-5 rounded-2xl bg-slate-950/60 border border-amber-500/20 hover:border-amber-500/40 transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                  <Receipt className="w-4 h-4" />
+                  <span>Despesas que Vencem Hoje</span>
+                </div>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                  {todayPayables.length} {todayPayables.length === 1 ? 'título a pagar' : 'títulos a pagar'}
+                </span>
+              </div>
+
+              <div className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-mono mb-2">
+                {formatCurrency(todayPayablesAmount)}
+              </div>
+
+              {todayPayables.length > 0 ? (
+                <div className="space-y-2 mt-4">
+                  {todayPayables.map(pay => (
+                    <div
+                      key={pay.id}
+                      className="p-3.5 rounded-xl bg-slate-900/90 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
+                    >
+                      <div className="truncate">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                          <span className="text-xs font-bold text-white truncate">{pay.supplier}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                          {pay.description} {pay.category ? `• ${pay.category}` : ''}
+                        </div>
+                        {pay.barcode && (
+                          <div className="text-[10px] text-slate-500 font-mono truncate mt-1">
+                            Linha digitável: {pay.barcode}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-2 flex-shrink-0">
+                        <div className="text-sm font-extrabold text-amber-400 font-mono">
+                          {formatCurrency(pay.amount)}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {pay.barcode && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyBarcode(pay.barcode, pay.id)}
+                              className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium flex items-center gap-1 transition-colors"
+                              title="Copiar linha digitável do boleto"
+                            >
+                              {copiedBarcodeId === pay.id ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span className="text-emerald-400 font-bold">Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 text-slate-400" />
+                                  <span>Copiar Linha</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            isPaidPayable(pay)
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+                          }`}>
+                            {isPaidPayable(pay) ? 'Pago' : 'Vence Hoje'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6 px-4 text-center rounded-xl bg-slate-900/40 border border-dashed border-slate-800 text-slate-400 text-xs mt-3">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500/60 mx-auto mb-1.5" />
+                  <p className="font-medium text-slate-300">Nenhuma despesa vence hoje</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Sem compromissos agendados para liquidação no dia.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <span className="text-slate-400">
+                {todayPayablesPaidAmount > 0
+                  ? `Pago hoje: ${formatCurrency(todayPayablesPaidAmount)}`
+                  : `Aguardando liquidação: ${formatCurrency(todayPayablesPendingAmount)}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('suppliers')}
+                className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 group"
+              >
+                <span>Central de Pagamentos</span>
+                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
+          </div>
+
+        </div>
       </div>
 
       {/* Gráfico de Fluxo de Caixa e Resumo da Carteira */}

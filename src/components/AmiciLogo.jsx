@@ -1,6 +1,6 @@
 import React from 'react'
 
-export function AmiciLogo({ className = 'h-10', variant = 'dark', showSubtitle = true }) {
+export function AmiciLogo({ className = 'h-10', variant = 'light', showSubtitle = true }) {
   // Cores institucionais Amici
   const isLight = variant === 'light'
   const primaryColor = isLight ? '#0A2540' : '#FFFFFF'

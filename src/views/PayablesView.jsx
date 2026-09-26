@@ -154,8 +154,47 @@ export function PayablesView({
         </div>
       </div>
 
+      {/* Cards de Métricas de Contas a Pagar */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Programado</span>
+          <div className="text-2xl font-black text-white mt-1.5 font-mono">{formatCurrency(totalAmount)}</div>
+          <div className="text-[11px] text-slate-500 mt-1">{filteredPayables.length} títulos no filtro</div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-amber-500/30 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">A Pagar / Agendados</span>
+          <div className="text-2xl font-black text-amber-300 mt-1.5 font-mono">
+            {formatCurrency(filteredPayables.filter(p => p.status !== 'paid' && p.status !== 'overdue').reduce((acc, p) => acc + (p.amount || 0), 0))}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {filteredPayables.filter(p => p.status !== 'paid' && p.status !== 'overdue').length} compromissos pendentes
+          </div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-rose-500/30 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400">Vencidos (Atraso)</span>
+          <div className="text-2xl font-black text-rose-400 mt-1.5 font-mono">
+            {formatCurrency(filteredPayables.filter(p => p.status === 'overdue').reduce((acc, p) => acc + (p.amount || 0), 0))}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {filteredPayables.filter(p => p.status === 'overdue').length} títulos em atraso
+          </div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-emerald-500/30 shadow-md">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Pagos / Liquidados</span>
+          <div className="text-2xl font-black text-emerald-400 mt-1.5 font-mono">
+            {formatCurrency(filteredPayables.filter(p => p.status === 'paid').reduce((acc, p) => acc + (p.amount || 0), 0))}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {filteredPayables.filter(p => p.status === 'paid').length} títulos quitados
+          </div>
+        </div>
+      </div>
+
       {/* Barra de Filtros e Busca */}
-      <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
+      <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3 shadow-md">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="relative w-full md:w-96">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -164,7 +203,7 @@ export function PayablesView({
               placeholder="Buscar por fornecedor, descrição ou código de barras..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -181,10 +220,10 @@ export function PayablesView({
                 key={tab.id}
                 type="button"
                 onClick={() => setFilterStatus(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   filterStatus === tab.id
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-transparent'
                 }`}
               >
                 {tab.label}
@@ -193,9 +232,9 @@ export function PayablesView({
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
+        <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60 font-mono">
           <span>{filteredPayables.length} títulos listados</span>
-          <span>Total Filtrado: <strong className="text-white font-mono text-sm">{formatCurrency(totalAmount)}</strong></span>
+          <span>Total Filtrado: <strong className="text-white text-sm">{formatCurrency(totalAmount)}</strong></span>
         </div>
       </div>
 
