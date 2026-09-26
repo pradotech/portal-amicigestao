@@ -10,7 +10,8 @@ import {
   Building2,
   ArrowLeft,
   Sun,
-  Moon
+  Moon,
+  X
 } from 'lucide-react'
 
 export function Sidebar({
@@ -20,7 +21,9 @@ export function Sidebar({
   clientName = 'Drillex',
   onBackToLanding,
   theme = 'light',
-  onToggleTheme
+  onToggleTheme,
+  isMobileOpen = false,
+  onCloseMobileMenu
 }) {
   const isLight = theme === 'light'
 
@@ -57,12 +60,35 @@ export function Sidebar({
     { id: 'settings', label: 'Configurações', icon: Settings, badge: null }
   ]
 
-  return (
-    <aside className={`no-print print:hidden w-64 flex-shrink-0 hidden md:flex flex-col justify-between py-6 px-4 backdrop-blur-xl border-r min-h-[calc(100vh-5rem)] transition-colors ${
-      isLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-950/60 border-slate-800/80 text-slate-100'
-    }`}>
+  const handleItemClick = (tabId) => {
+    onSelectTab(tabId)
+    if (onCloseMobileMenu) {
+      onCloseMobileMenu()
+    }
+  }
+
+  const renderContent = (isDrawer = false) => (
+    <div className="flex flex-col justify-between h-full space-y-6">
       <div className="space-y-6">
         
+        {/* Topo do Drawer Mobile com Botão de Fechar */}
+        {isDrawer && (
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs font-bold text-sky-700 dark:text-cyan-400">
+              <Sparkles className="w-4 h-4 text-sky-600" />
+              <span>Menu de Navegação</span>
+            </div>
+            <button
+              type="button"
+              onClick={onCloseMobileMenu}
+              className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 transition-colors"
+              title="Fechar menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+
         {/* Card do Cliente em Atendimento */}
         <div className={`p-3.5 rounded-2xl border space-y-2 transition-colors ${
           isLight ? 'bg-slate-50 border-slate-200 shadow-sm' : 'bg-slate-900/90 border-slate-800 shadow-inner'
@@ -71,17 +97,20 @@ export function Sidebar({
             <span className={`uppercase font-semibold tracking-wider text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>Cliente Ativo</span>
             <button
               type="button"
-              onClick={onBackToLanding}
+              onClick={() => {
+                onBackToLanding()
+                if (onCloseMobileMenu) onCloseMobileMenu()
+              }}
               className="text-cyan-600 hover:text-cyan-700 font-semibold text-[11px] hover:underline focus:outline-none"
             >
               Trocar
             </button>
           </div>
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-600 to-sky-700 text-white font-bold flex items-center justify-center text-sm shadow-md shadow-cyan-950/20">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-600 to-sky-700 text-white font-bold flex items-center justify-center text-sm shadow-md shadow-cyan-950/20 flex-shrink-0">
               {clientName.charAt(0)}
             </div>
-            <div className="truncate">
+            <div className="truncate min-w-0">
               <div className={`font-bold text-sm truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>{clientName}</div>
               <div className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -105,7 +134,7 @@ export function Sidebar({
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => onSelectTab(item.id)}
+                  onClick={() => handleItemClick(item.id)}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all relative group focus:outline-none focus:ring-0 ${
                     isActive
                       ? (isLight
@@ -122,7 +151,7 @@ export function Sidebar({
                     }`} />
                   )}
 
-                  <div className="flex items-center gap-3 truncate">
+                  <div className="flex items-center gap-3 truncate min-w-0">
                     <Icon className={`w-4 h-4 transition-colors flex-shrink-0 ${
                       isActive
                         ? (isLight ? 'text-sky-700' : 'text-cyan-400')
@@ -138,7 +167,7 @@ export function Sidebar({
                   </div>
 
                   {item.badge && (
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${item.badgeColor || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${item.badgeColor || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                       {item.badge}
                     </span>
                   )}
@@ -155,7 +184,7 @@ export function Sidebar({
             : 'bg-gradient-to-b from-slate-900/90 to-slate-950 border-slate-800/90 text-slate-400 shadow-inner'
         }`}>
           <div className={`flex items-center gap-2 font-semibold mb-1 ${isLight ? 'text-sky-800' : 'text-cyan-400'}`}>
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
             <span>Rotina BPO Amici</span>
           </div>
           <p className={`text-[11px] leading-relaxed ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
@@ -189,7 +218,10 @@ export function Sidebar({
 
         <button
           type="button"
-          onClick={onBackToLanding}
+          onClick={() => {
+            onBackToLanding()
+            if (onCloseMobileMenu) onCloseMobileMenu()
+          }}
           className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition-all shadow-sm focus:outline-none ${
             isLight
               ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900'
@@ -200,6 +232,37 @@ export function Sidebar({
           <span>Trocar de Empresa</span>
         </button>
       </div>
-    </aside>
+    </div>
+  )
+
+  return (
+    <>
+      {/* 1. SIDEBAR DESKTOP (Fixa em telas md ou maiores) */}
+      <aside className={`no-print print:hidden w-64 flex-shrink-0 hidden md:flex flex-col justify-between py-6 px-4 backdrop-blur-xl border-r min-h-[calc(100vh-5rem)] transition-colors ${
+        isLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-950/60 border-slate-800/80 text-slate-100'
+      }`}>
+        {renderContent(false)}
+      </aside>
+
+      {/* 2. DRAWER / GAVETA MOBILE (Aparece ao clicar no Menu Hambúrguer em telas menores) */}
+      {isMobileOpen && (
+        <div className="no-print print:hidden fixed inset-0 z-50 md:hidden animate-in fade-in duration-200">
+          
+          {/* Overlay escuro de fundo com blur */}
+          <div
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
+            onClick={onCloseMobileMenu}
+          />
+
+          {/* Painel lateral deslizante */}
+          <div className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] z-50 p-5 shadow-2xl flex flex-col justify-between overflow-y-auto transform transition-transform duration-300 animate-in slide-in-from-left ${
+            isLight ? 'bg-white border-r border-slate-200 text-slate-800' : 'bg-slate-950 border-r border-slate-800 text-slate-100'
+          }`}>
+            {renderContent(true)}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
+

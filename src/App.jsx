@@ -74,6 +74,7 @@ export function App() {
   const [supabaseConfigured, setSupabaseConfigured] = useState(false)
   const [showRenewModal, setShowRenewModal] = useState(false)
   const [tokenVersion, setTokenVersion] = useState(0)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('amici_user_session')
@@ -533,6 +534,7 @@ export function App() {
         onLogout={handleLogout}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
         onOpenSettings={() => {
           setViewMode('bpo')
           setActiveTab('settings')
@@ -641,6 +643,8 @@ export function App() {
             onBackToLanding={handleBackToLanding}
             theme={theme}
             onToggleTheme={toggleTheme}
+            isMobileOpen={isMobileMenuOpen}
+            onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
           />
         )}
 

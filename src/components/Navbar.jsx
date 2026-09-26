@@ -14,7 +14,8 @@ import {
   Zap,
   LogOut,
   Sun,
-  Moon
+  Moon,
+  Menu
 } from 'lucide-react'
 
 export function Navbar({
@@ -29,7 +30,8 @@ export function Navbar({
   currentUser,
   onLogout,
   theme = 'light',
-  onToggleTheme
+  onToggleTheme,
+  onOpenMobileMenu
 }) {
   const isLight = theme === 'light'
 
@@ -37,15 +39,34 @@ export function Navbar({
     <header className={`no-print print:hidden sticky top-0 z-40 w-full backdrop-blur-xl border-b transition-colors shadow-sm ${
       isLight ? 'bg-white/95 border-slate-200 text-slate-900' : 'bg-slate-950/80 border-slate-800/80 text-slate-100'
     }`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4">
           
-          {/* Logo Amici & Botão Voltar para Seleção de Clientes */}
-          <div className="flex items-center gap-3 sm:gap-5">
+          {/* Lado Esquerdo: Menu Hambúrguer (Mobile) + Logo Amici & Botão Trocar Cliente */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            
+            {/* Botão Hambúrguer Mobile (Aparece apenas em telas menores que md) */}
+            {onOpenMobileMenu && (
+              <button
+                type="button"
+                onClick={onOpenMobileMenu}
+                className={`md:hidden p-2 rounded-xl border text-xs font-semibold transition-all shadow-sm focus:outline-none ${
+                  isLight
+                    ? 'bg-slate-100 hover:bg-slate-200/80 border-slate-200 text-slate-800'
+                    : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-200'
+                }`}
+                title="Abrir menu de navegação"
+                aria-label="Abrir menu"
+              >
+                <Menu className="w-5 h-5 text-sky-700 dark:text-cyan-400" />
+              </button>
+            )}
+
+            {/* Botão Voltar para Seleção de Clientes (Desktop) */}
             <button
               type="button"
               onClick={onBackToLanding}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all shadow-sm group ${
+              className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all shadow-sm group ${
                 isLight
                   ? 'bg-slate-100 hover:bg-slate-200/80 border-slate-200 text-slate-700 hover:text-slate-900'
                   : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white'
@@ -55,27 +76,30 @@ export function Navbar({
               <ArrowLeft className={`w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform ${
                 isLight ? 'text-slate-500 group-hover:text-cyan-700' : 'text-slate-400 group-hover:text-cyan-400'
               }`} />
-              <span className="hidden sm:inline">Trocar Cliente</span>
+              <span className="hidden md:inline">Trocar Cliente</span>
             </button>
 
-            <AmiciLogo className="h-8 sm:h-10" variant={theme} />
+            {/* Logotipo Oficial Amici */}
+            <div className="flex items-center">
+              <AmiciLogo className="h-7 sm:h-9 md:h-10" variant={theme} />
+            </div>
             
             {/* Tag da Empresa Ativa */}
             {selectedClient && (
-              <div className={`hidden lg:flex items-center gap-2 px-3.5 py-1 rounded-full border text-xs font-semibold shadow-inner ${
+              <div className={`hidden xl:flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-semibold shadow-inner ${
                 isLight
                   ? 'bg-sky-50 border-sky-200 text-sky-900'
                   : 'bg-slate-900 border-cyan-500/30 text-cyan-300'
               }`}>
                 <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
                 <span className={`font-normal ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Empresa:</span>
-                <span className="font-bold">{selectedClient.tradeName}</span>
+                <span className="font-bold truncate max-w-[120px]">{selectedClient.tradeName}</span>
               </div>
             )}
           </div>
 
-          {/* Ações Rápidas do Topo */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Lado Direito: Ações Rápidas do Topo */}
+          <div className="flex items-center gap-1.5 sm:gap-3">
             
             {/* Botão de Toggle Light / Dark Mode */}
             {onToggleTheme && (
@@ -92,12 +116,12 @@ export function Navbar({
                 {isLight ? (
                   <>
                     <Moon className="w-4 h-4 text-cyan-700" />
-                    <span className="hidden md:inline font-medium">Tema Escuro</span>
+                    <span className="hidden lg:inline font-medium">Tema Escuro</span>
                   </>
                 ) : (
                   <>
                     <Sun className="w-4 h-4 text-amber-400" />
-                    <span className="hidden md:inline font-medium">Tema Claro</span>
+                    <span className="hidden lg:inline font-medium">Tema Claro</span>
                   </>
                 )}
               </button>
@@ -108,7 +132,7 @@ export function Navbar({
               type="button"
               onClick={onToggleViewMode}
               title="Alternar entre a visão de analista Amici e o portal exclusivo do cliente"
-              className={`hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all border shadow-sm ${
+              className={`hidden md:flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border shadow-sm ${
                 viewMode === 'bpo'
                   ? (isLight
                       ? 'bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200'
@@ -119,7 +143,7 @@ export function Navbar({
               }`}
             >
               <UserCheck className={`w-3.5 h-3.5 ${isLight ? 'text-cyan-700' : 'text-cyan-400'}`} />
-              <span>{viewMode === 'bpo' ? 'Visão BPO Amici' : 'Portal do Cliente'}</span>
+              <span className="hidden xl:inline">{viewMode === 'bpo' ? 'Visão BPO Amici' : 'Portal do Cliente'}</span>
             </button>
 
             {/* Botão Sincronizar Conta Azul */}
@@ -128,7 +152,7 @@ export function Navbar({
               onClick={onTriggerSync}
               disabled={isSyncing}
               title="Sincronizar dados em tempo real com a Conta Azul"
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-md ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-md ${
                 isSyncing
                   ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-800 cursor-wait'
                   : 'bg-gradient-to-r from-sky-600 via-cyan-600 to-teal-600 hover:from-sky-500 hover:to-teal-500 text-white active:scale-95'
@@ -139,9 +163,9 @@ export function Navbar({
             </button>
 
             {/* Perfil do Usuário e Botão de Logout */}
-            <div className={`flex items-center gap-2 pl-2 sm:pl-3 border-l ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
-              <div className="hidden sm:flex flex-col text-right">
-                <span className={`text-xs font-bold truncate max-w-[130px] ${isLight ? 'text-slate-900' : 'text-slate-200'}`}>
+            <div className={`flex items-center gap-1.5 sm:gap-2 pl-1.5 sm:pl-3 border-l ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
+              <div className="hidden lg:flex flex-col text-right">
+                <span className={`text-xs font-bold truncate max-w-[110px] ${isLight ? 'text-slate-900' : 'text-slate-200'}`}>
                   {currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Analista Amici'}
                 </span>
                 <span className={`text-[10px] font-mono flex items-center justify-end gap-1 ${isLight ? 'text-cyan-700' : 'text-cyan-400'}`}>
@@ -160,7 +184,7 @@ export function Navbar({
                 }`}
               >
                 <LogOut className={`w-4 h-4 ${isLight ? 'text-slate-700' : 'text-slate-400'}`} />
-                <span className={`hidden md:inline font-bold ${isLight ? 'text-slate-800' : 'text-slate-300'}`}>Sair</span>
+                <span className="hidden md:inline font-bold">Sair</span>
               </button>
             </div>
 
@@ -171,3 +195,4 @@ export function Navbar({
     </header>
   )
 }
+
