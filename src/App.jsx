@@ -349,8 +349,26 @@ export function App() {
           rawPessoas: pessoas
         })
 
-        // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase
-        await loadDataFromSupabase(targetId)
+        // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase com fallback seguro
+        const [supaPayables, supaReceivables, supaTx, supaPessoas] = await Promise.all([
+          fetchPayablesFromSupabase(targetId),
+          fetchReceivablesFromSupabase(targetId),
+          fetchBankTransactionsFromSupabase(targetId),
+          fetchCounterpartiesFromSupabase(targetId)
+        ])
+
+        if (supaPayables && supaPayables.length > 0) {
+          setPayables(supaPayables)
+        }
+        if (supaReceivables && supaReceivables.length > 0) {
+          setReceivables(supaReceivables)
+        }
+        if (supaTx && supaTx.length > 0) {
+          setTransactions(supaTx)
+        }
+        if (supaPessoas && supaPessoas.length > 0) {
+          setRawPessoas(supaPessoas)
+        }
 
         setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${syncResult.mappedReceivables ? syncResult.mappedReceivables.length : 0} contas a receber)!`)
       } else {

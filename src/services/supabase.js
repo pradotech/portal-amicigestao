@@ -279,9 +279,23 @@ export async function fetchPayablesFromSupabase(clientId) {
     if (error || !data) return []
 
     return data.map(p => {
+      const todayStr = new Date().toISOString().split('T')[0]
       const rawAmount = Number(p.amount || 0)
-      const amountPaid = p.amount_paid !== null && p.amount_paid !== undefined ? Number(p.amount_paid) : (p.status === 'paid' ? rawAmount : 0)
-      const amountRemaining = p.amount_remaining !== null && p.amount_remaining !== undefined ? Number(p.amount_remaining) : (p.status === 'paid' ? 0 : rawAmount)
+      const paidAmount = Number(p.paid_amount || p.amount_paid || (p.status === 'paid' ? rawAmount : 0))
+      const isFullyPaid = p.status === 'paid' || (rawAmount > 0 && paidAmount >= rawAmount)
+      const isPartial = !isFullyPaid && paidAmount > 0 && paidAmount < rawAmount
+      const amountRemaining = isFullyPaid ? 0 : Math.max(0, rawAmount - paidAmount)
+
+      let mappedStatus = p.status || 'scheduled'
+      if (isFullyPaid) {
+        mappedStatus = 'paid'
+      } else if (isPartial) {
+        mappedStatus = 'partial'
+      } else if (p.due_date && p.due_date < todayStr) {
+        mappedStatus = 'overdue'
+      } else if (p.due_date && p.due_date === todayStr) {
+        mappedStatus = 'today'
+      }
 
       return {
         id: p.id,
@@ -290,11 +304,11 @@ export async function fetchPayablesFromSupabase(clientId) {
         category: p.category_name,
         description: p.description,
         amount: rawAmount,
-        amountPaid: amountPaid,
+        amountPaid: paidAmount,
         amountRemaining: amountRemaining,
         dueDate: p.due_date,
-        status: p.status,
-        bankAccount: 'Banco Itaú Unibanco',
+        status: mappedStatus,
+        bankAccount: 'Banco C6 PJ',
         barcode: p.barcode || '',
         approvalStatus: p.status === 'pending_client' ? 'pending' : 'approved',
         hasAttachment: true
@@ -311,9 +325,10 @@ export async function updatePayableStatusInSupabase(id, status) {
   if (!supabase || !id) return false
 
   try {
+    const dbStatus = (status === 'today' || status === 'partial') ? 'scheduled' : status
     const { error } = await supabase
       .from('payables')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({ status: dbStatus, updated_at: new Date().toISOString() })
       .eq('id', id)
 
     if (error) throw error
@@ -335,8 +350,9 @@ export async function addPayableToSupabase(payable) {
       category_name: payable.category || 'Fornecedores & Insumos',
       description: payable.description,
       amount: Number(payable.amount || 0),
+      paid_amount: Number(payable.amountPaid || 0),
       due_date: payable.dueDate,
-      status: payable.status || 'scheduled',
+      status: (payable.status === 'today' || payable.status === 'partial') ? 'scheduled' : (payable.status || 'scheduled'),
       barcode: payable.barcode || null,
       notes: 'Lançamento manual registrado no Portal'
     }
@@ -355,6 +371,8 @@ export async function addPayableToSupabase(payable) {
       category: data.category_name,
       description: data.description,
       amount: Number(data.amount),
+      amountPaid: Number(data.paid_amount || 0),
+      amountRemaining: Math.max(0, Number(data.amount) - Number(data.paid_amount || 0)),
       dueDate: data.due_date,
       status: data.status,
       barcode: data.barcode,
@@ -388,9 +406,23 @@ export async function fetchReceivablesFromSupabase(clientId) {
     if (error || !data) return []
 
     return data.map(r => {
+      const todayStr = new Date().toISOString().split('T')[0]
       const rawAmount = Number(r.amount || 0)
-      const amountPaid = r.amount_paid !== null && r.amount_paid !== undefined ? Number(r.amount_paid) : (r.status === 'received' ? rawAmount : 0)
-      const amountRemaining = r.amount_remaining !== null && r.amount_remaining !== undefined ? Number(r.amount_remaining) : (r.status === 'received' ? 0 : rawAmount)
+      const receivedAmount = Number(r.received_amount || r.amount_paid || (r.status === 'received' ? rawAmount : 0))
+      const isFullyReceived = r.status === 'received' || (rawAmount > 0 && receivedAmount >= rawAmount)
+      const isPartial = !isFullyReceived && receivedAmount > 0 && receivedAmount < rawAmount
+      const amountRemaining = isFullyReceived ? 0 : Math.max(0, rawAmount - receivedAmount)
+
+      let mappedStatus = r.status || 'pending'
+      if (isFullyReceived) {
+        mappedStatus = 'received'
+      } else if (isPartial) {
+        mappedStatus = 'partial'
+      } else if (r.due_date && r.due_date < todayStr) {
+        mappedStatus = 'overdue'
+      } else if (r.due_date && r.due_date === todayStr) {
+        mappedStatus = 'today'
+      }
 
       return {
         id: r.id,
@@ -399,10 +431,10 @@ export async function fetchReceivablesFromSupabase(clientId) {
         category: r.category_name,
         description: r.description,
         amount: rawAmount,
-        amountPaid: amountPaid,
+        amountPaid: receivedAmount,
         amountRemaining: amountRemaining,
         dueDate: r.due_date,
-        status: r.status,
+        status: mappedStatus,
         paymentMethod: r.payment_method === 'boleto' ? 'Boleto Bancário' : (r.payment_method || 'Boleto / PIX'),
         invoiceNumber: r.invoice_number || 'NF-e Oficial'
       }
@@ -418,9 +450,10 @@ export async function updateReceivableStatusInSupabase(id, status) {
   if (!supabase || !id) return false
 
   try {
+    const dbStatus = (status === 'today' || status === 'partial' || status === 'future') ? 'pending' : status
     const { error } = await supabase
       .from('receivables')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({ status: dbStatus, updated_at: new Date().toISOString() })
       .eq('id', id)
 
     if (error) throw error
@@ -624,25 +657,48 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
       }
     }
 
+    const todayStr = new Date().toISOString().split('T')[0]
+
     // d) Salvar Contas a Receber Reais da Conta Azul
     if (syncData.mappedReceivables && syncData.mappedReceivables.length > 0) {
       try {
-        await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
-        
-        const receivablesPayload = syncData.mappedReceivables.map(r => ({
-          client_id: resolvedClientId,
-          ca_receivable_id: r.caReceivableId || r.id,
-          customer_name: r.customer,
-          category_name: r.category || 'Venda de Produtos & Serviços',
-          description: r.description,
-          amount: Number(r.amount || 0),
-          due_date: r.dueDate,
-          status: r.status,
-          payment_method: 'boleto',
-          invoice_number: r.invoiceNumber
-        }))
+        const receivablesPayload = syncData.mappedReceivables.map(r => {
+          let dbStatus = 'pending'
+          const rawAmount = Number(r.amount || 0)
+          const amountPaid = Number(r.amountPaid || 0)
+          const isFullyReceived = r.status === 'received' || (rawAmount > 0 && amountPaid >= rawAmount)
+          
+          if (isFullyReceived) {
+            dbStatus = 'received'
+          } else if (r.status === 'overdue' || (r.dueDate && r.dueDate < todayStr)) {
+            dbStatus = 'overdue'
+          } else if (r.status === 'cancelled') {
+            dbStatus = 'cancelled'
+          } else {
+            dbStatus = 'pending'
+          }
 
-        await supabase.from('receivables').insert(receivablesPayload)
+          return {
+            client_id: resolvedClientId,
+            ca_receivable_id: String(r.caReceivableId || r.id),
+            customer_name: r.customer || 'Cliente Conta Azul',
+            category_name: r.category || 'Venda de Produtos & Serviços',
+            description: r.description || `Recebimento - ${r.customer || 'Cliente'}`,
+            amount: rawAmount,
+            received_amount: amountPaid,
+            due_date: r.dueDate || todayStr,
+            status: dbStatus,
+            payment_method: 'boleto',
+            invoice_number: r.invoiceNumber || null
+          }
+        })
+
+        const { error: insertRecErr } = await supabase.from('receivables').upsert(receivablesPayload, { onConflict: 'client_id, ca_receivable_id' })
+        if (insertRecErr) {
+          // Fallback de substituição se upsert falhar por falta de unique constraint
+          await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
+          await supabase.from('receivables').insert(receivablesPayload)
+        }
       } catch (err) {
         console.warn('Aviso ao persistir receivables no Supabase:', err)
       }
@@ -651,22 +707,45 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
     // e) Salvar Contas a Pagar Reais da Conta Azul
     if (syncData.mappedPayables && syncData.mappedPayables.length > 0) {
       try {
-        await supabase.from('payables').delete().eq('client_id', resolvedClientId)
-        
-        const payablesPayload = syncData.mappedPayables.map(p => ({
-          client_id: resolvedClientId,
-          ca_payable_id: p.caPayableId || p.id,
-          supplier_name: p.supplier,
-          category_name: p.category || 'Fornecedores & Insumos',
-          description: p.description,
-          amount: Number(p.amount || 0),
-          due_date: p.dueDate,
-          status: p.status,
-          barcode: p.barcode || null,
-          notes: 'Sincronizado via Conta Azul V2'
-        }))
+        const payablesPayload = syncData.mappedPayables.map(p => {
+          let dbStatus = 'scheduled'
+          const rawAmount = Number(p.amount || 0)
+          const amountPaid = Number(p.amountPaid || 0)
+          const isFullyPaid = p.status === 'paid' || (rawAmount > 0 && amountPaid >= rawAmount)
 
-        await supabase.from('payables').insert(payablesPayload)
+          if (isFullyPaid) {
+            dbStatus = 'paid'
+          } else if (p.status === 'overdue' || (p.dueDate && p.dueDate < todayStr)) {
+            dbStatus = 'overdue'
+          } else if (p.status === 'approved_by_client') {
+            dbStatus = 'approved_by_client'
+          } else if (p.status === 'cancelled') {
+            dbStatus = 'cancelled'
+          } else {
+            dbStatus = 'scheduled'
+          }
+
+          return {
+            client_id: resolvedClientId,
+            ca_payable_id: String(p.caPayableId || p.id),
+            supplier_name: p.supplier || 'Fornecedor',
+            category_name: p.category || 'Fornecedores & Insumos',
+            description: p.description || `Pagamento - ${p.supplier || 'Fornecedor'}`,
+            amount: rawAmount,
+            paid_amount: amountPaid,
+            due_date: p.dueDate || todayStr,
+            status: dbStatus,
+            barcode: p.barcode || null,
+            notes: 'Sincronizado via Conta Azul'
+          }
+        })
+
+        const { error: insertPayErr } = await supabase.from('payables').upsert(payablesPayload, { onConflict: 'client_id, ca_payable_id' })
+        if (insertPayErr) {
+          // Fallback de substituição se upsert falhar por falta de unique constraint
+          await supabase.from('payables').delete().eq('client_id', resolvedClientId)
+          await supabase.from('payables').insert(payablesPayload)
+        }
       } catch (err) {
         console.warn('Aviso ao persistir payables no Supabase:', err)
       }
