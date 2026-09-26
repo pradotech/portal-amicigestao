@@ -349,7 +349,7 @@ export function App() {
           rawPessoas: pessoas
         })
 
-        // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase com fallback seguro
+        // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase de forma incondicional
         const [supaPayables, supaReceivables, supaTx, supaPessoas] = await Promise.all([
           fetchPayablesFromSupabase(targetId),
           fetchReceivablesFromSupabase(targetId),
@@ -357,20 +357,12 @@ export function App() {
           fetchCounterpartiesFromSupabase(targetId)
         ])
 
-        if (supaPayables && supaPayables.length > 0) {
-          setPayables(supaPayables)
-        }
-        if (supaReceivables && supaReceivables.length > 0) {
-          setReceivables(supaReceivables)
-        }
-        if (supaTx && supaTx.length > 0) {
-          setTransactions(supaTx)
-        }
-        if (supaPessoas && supaPessoas.length > 0) {
-          setRawPessoas(supaPessoas)
-        }
+        setPayables(supaPayables || [])
+        setReceivables(supaReceivables || [])
+        setTransactions(supaTx || [])
+        setRawPessoas(supaPessoas || [])
 
-        setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${syncResult.mappedReceivables ? syncResult.mappedReceivables.length : 0} contas a receber)!`)
+        setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${supaReceivables ? supaReceivables.length : 0} contas a receber)!`)
       } else {
         // Se a API retornou expirada (401), recarrega os dados intactos do Supabase
         await loadDataFromSupabase(targetId)
