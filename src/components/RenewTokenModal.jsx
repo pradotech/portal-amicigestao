@@ -8,21 +8,49 @@ import {
   Sparkles,
   ExternalLink,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  ArrowRight
 } from 'lucide-react'
 import {
   saveContaAzulGlobalConfig,
   getContaAzulGlobalConfig,
-  getTokenExpirationInfo
+  getTokenExpirationInfo,
+  refreshContaAzulAccessToken
 } from '../services/contaAzulService'
 
-export function RenewTokenModal({ isOpen, onClose, onTokenUpdated, currentClientName = 'Drillex' }) {
+export function RenewTokenModal({ isOpen, onClose, onTokenUpdated, currentClientName = 'Drillex', targetClient }) {
   const [tokenInput, setTokenInput] = useState('')
   const [errorMessage, setErrorMessage] = useState(null)
   const [successMessage, setSuccessMessage] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isAutoRenewing, setIsAutoRenewing] = useState(false)
 
   if (!isOpen) return null
+
+  const handleAutoRenew = async () => {
+    setErrorMessage(null)
+    setSuccessMessage(null)
+    setIsAutoRenewing(true)
+
+    try {
+      const res = await refreshContaAzulAccessToken(targetClient)
+      if (res.success && res.accessToken) {
+        const expInfo = getTokenExpirationInfo(res.accessToken)
+        setSuccessMessage(`✓ Token renovado automaticamente com sucesso via OAuth2! Válido até ${expInfo.expiresAt || '60 min'}.`)
+        setTimeout(() => {
+          setIsAutoRenewing(false)
+          if (onTokenUpdated) onTokenUpdated(res.accessToken)
+          onClose()
+        }, 900)
+      } else {
+        setErrorMessage(res.error || 'Não foi possível renovar com o Refresh Token atual. Cole um token novo abaixo.')
+        setIsAutoRenewing(false)
+      }
+    } catch (err) {
+      setErrorMessage(`Erro na renovação: ${err.message}`)
+      setIsAutoRenewing(false)
+    }
+  }
 
   const handleApplyToken = () => {
     setErrorMessage(null)
@@ -134,17 +162,47 @@ export function RenewTokenModal({ isOpen, onClose, onTokenUpdated, currentClient
           </div>
         )}
 
-        {/* Campo de Inserção de Token */}
+        {/* Opção 1: Renovação Automática com 1 Clique */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-sky-950/40 to-slate-950 border border-cyan-800/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
+              <Sparkles className="w-4 h-4 text-cyan-400" />
+              <span>Renovação Rápida via OAuth2 (1 Clique)</span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Utiliza o Refresh Token salvo para gerar um novo token sem precisar abrir o Conta Azul.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleAutoRenew}
+            disabled={isAutoRenewing}
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-xs font-bold text-white shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 flex-shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isAutoRenewing ? 'animate-spin' : ''}`} />
+            <span>{isAutoRenewing ? 'Renovando...' : 'Renovar Agora'}</span>
+          </button>
+        </div>
+
+        {/* Divisor Visual */}
+        <div className="relative flex items-center justify-center">
+          <div className="border-t border-slate-800 w-full" />
+          <span className="bg-slate-900 px-3 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+            ou cole manualmente
+          </span>
+        </div>
+
+        {/* Opção 2: Campo de Inserção de Token */}
         <div className="space-y-2">
           <label className="block text-xs font-semibold text-slate-300">
             Cole o novo <span className="font-mono text-cyan-400">access_token</span> ou a resposta <span className="font-mono text-cyan-400">JSON</span> da Conta Azul:
           </label>
           <textarea
-            rows="6"
+            rows="4"
             value={tokenInput}
             onChange={(e) => setTokenInput(e.target.value)}
             placeholder={'Cole o token JWT (inicia com "eyJraWQi...") ou o JSON completo:\n{\n  "access_token": "eyJ...",\n  "expires_in": 3600\n}'}
-            className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-mono text-cyan-300 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
+            className="w-full p-3 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-mono text-cyan-300 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
           />
         </div>
 

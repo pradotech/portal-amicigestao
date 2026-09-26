@@ -4,6 +4,8 @@
  * Base URL Oficial: https://api-v2.contaazul.com
  */
 
+import { updateContaAzulIntegrationToken } from './supabase'
+
 const DEFAULT_CLIENT_ID = '510utbibu9gb6002lerhav28tk'
 const DEFAULT_CLIENT_SECRET = '7iotvc8bqcunp3m21u6htv5ti639skkvpm9eaqjosg5ks4ufhi4'
 const DEFAULT_COMPANY_ID = '3272538'
@@ -31,6 +33,36 @@ export function getContaAzulGlobalConfig() {
   }
 }
 
+/**
+ * Decodifica com segurança o payload de um token JWT (suportando formato base64url e caracteres especiais)
+ */
+export function parseJwtPayload(token) {
+  if (!token || typeof token !== 'string') return null
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    let base64Url = parts[1]
+    let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    while (base64.length % 4 !== 0) {
+      base64 += '='
+    }
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    return JSON.parse(jsonPayload)
+  } catch (e) {
+    try {
+      const parts = token.split('.')
+      return JSON.parse(atob(parts[1]))
+    } catch {
+      return null
+    }
+  }
+}
+
 export function getTokenExpirationInfo(tokenOverride) {
   const config = getContaAzulGlobalConfig()
   const token = tokenOverride || config.accessToken
@@ -38,27 +70,20 @@ export function getTokenExpirationInfo(tokenOverride) {
     return { isConfigured: false, isExpired: true, expiresAt: null, remainingMinutes: 0 }
   }
 
-  try {
-    const parts = token.split('.')
-    if (parts.length === 3) {
-      const payload = JSON.parse(atob(parts[1]))
-      if (payload.exp) {
-        const expDate = new Date(payload.exp * 1000)
-        const now = new Date()
-        const diffMs = expDate.getTime() - now.getTime()
-        const remainingMinutes = Math.round(diffMs / (1000 * 60))
-        return {
-          isConfigured: true,
-          isExpired: remainingMinutes <= 0,
-          expiresAt: expDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-          remainingMinutes: Math.max(0, remainingMinutes),
-          email: payload.email || payload.username || config.userEmail,
-          companyId: payload.ca_company_id || config.companyId
-        }
-      }
+  const payload = parseJwtPayload(token)
+  if (payload && payload.exp) {
+    const expDate = new Date(payload.exp * 1000)
+    const now = new Date()
+    const diffMs = expDate.getTime() - now.getTime()
+    const remainingMinutes = Math.round(diffMs / (1000 * 60))
+    return {
+      isConfigured: true,
+      isExpired: remainingMinutes <= 0,
+      expiresAt: expDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      remainingMinutes: Math.max(0, remainingMinutes),
+      email: payload.email || payload.username || config.userEmail,
+      companyId: payload.ca_company_id || config.companyId
     }
-  } catch (e) {
-    console.warn('Erro ao decodificar expiração do token:', e)
   }
 
   return { isConfigured: true, isExpired: false, expiresAt: null, remainingMinutes: 60 }
@@ -427,56 +452,137 @@ export async function exchangeContaAzulCodeForToken(code) {
 
 /**
  * Tenta renovar o Access Token automaticamente usando o Refresh Token OAuth2 (API v2)
+ * Suporta tanto a configuração global quanto as credenciais do cliente especificado
  */
-export async function refreshContaAzulAccessToken() {
+export async function refreshContaAzulAccessToken(targetClient) {
   const config = getContaAzulGlobalConfig()
-  if (!config.refreshToken) return { success: false, error: 'Nenhum Refresh Token configurado' }
+  const clientCa = targetClient?.contaAzulConfig || {}
 
-  const clientId = config.clientId || DEFAULT_CLIENT_ID
-  const clientSecret = config.clientSecret || DEFAULT_CLIENT_SECRET
+  const refreshToken = (clientCa.refreshToken || config.refreshToken || '').trim()
+  if (!refreshToken) {
+    console.warn('⚠️ Nenhum Refresh Token configurado para efetuar a renovação automática.')
+    return { success: false, error: 'Nenhum Refresh Token configurado' }
+  }
+
+  const clientId = (clientCa.clientId || config.clientId || DEFAULT_CLIENT_ID).trim()
+  const clientSecret = (config.clientSecret || DEFAULT_CLIENT_SECRET).trim()
+  const redirectUri = config.redirectUri || DEFAULT_REDIRECT_URI
   const basicAuth = btoa(`${clientId}:${clientSecret}`)
 
   const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  
   const tokenUrls = [
     isDev ? '/api-contaazul/oauth/token' : 'https://api-v2.contaazul.com/oauth/token',
+    isDev ? '/api-contaazul/oauth2/token' : 'https://api-v2.contaazul.com/oauth2/token',
+    isDev ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token',
+    isDev ? '/api-ca-v1/oauth/token' : 'https://api.contaazul.com/oauth/token',
     'https://api-v2.contaazul.com/oauth/token',
-    isDev ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token'
+    'https://api.contaazul.com/oauth2/token'
   ]
+
+  let lastError = null
 
   for (const tokenUrl of tokenUrls) {
     try {
+      const body = new URLSearchParams()
+      body.append('grant_type', 'refresh_token')
+      body.append('refresh_token', refreshToken)
+
       const res = await fetch(tokenUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${basicAuth}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json'
         },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: config.refreshToken
-        })
+        body: body
       })
 
       if (res.ok) {
         const data = await res.json()
         if (data.access_token) {
+          const newAccessToken = data.access_token
+          const newRefreshToken = data.refresh_token || refreshToken
+
+          // 1. Salvar no localStorage
           saveContaAzulGlobalConfig(
             clientId,
             clientSecret,
-            config.redirectUri,
-            data.access_token,
-            data.refresh_token || config.refreshToken
+            redirectUri,
+            newAccessToken,
+            newRefreshToken
           )
+
+          // 2. Persistir no Supabase para integridade
+          const resolvedClientId = targetClient?.id || 'd0000000-0000-0000-0000-000000000001'
+          await updateContaAzulIntegrationToken(
+            resolvedClientId,
+            newAccessToken,
+            newRefreshToken,
+            targetClient?.companyId || config.companyId,
+            targetClient?.userEmail || config.userEmail
+          )
+
+          // 3. Notificar a aplicação inteira via evento customizado
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('amici_token_refreshed', {
+              detail: {
+                clientId: resolvedClientId,
+                accessToken: newAccessToken,
+                refreshToken: newRefreshToken
+              }
+            }))
+          }
+
           console.log('✓ Token da Conta Azul renovado automaticamente com sucesso!')
-          return { success: true, accessToken: data.access_token }
+          return {
+            success: true,
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken
+          }
         }
+      } else {
+        const errText = await res.text()
+        lastError = `HTTP ${res.status}: ${errText}`
+        console.warn(`Tentativa de renovação em ${tokenUrl} falhou:`, errText)
       }
     } catch (err) {
-      console.warn('Tentando próximo endpoint de token:', err.message)
+      lastError = err.message
+      console.warn(`Erro de conexão ao renovar token em ${tokenUrl}:`, err.message)
     }
   }
 
-  return { success: false, error: 'Não foi possível renovar o token automaticamente' }
+  return { success: false, error: lastError || 'Não foi possível renovar o token automaticamente' }
+}
+
+/**
+ * Verifica proativamente se o token está expirado ou prestes a expirar (<= 5 minutos)
+ * e realiza a renovação automática em segundo plano
+ */
+export async function checkAndAutoRenewToken(targetClient) {
+  const config = getContaAzulGlobalConfig()
+  const token = targetClient?.contaAzulConfig?.accessToken || config.accessToken
+  const refreshToken = targetClient?.contaAzulConfig?.refreshToken || config.refreshToken
+
+  if (!refreshToken) {
+    return { shouldRenew: false, reason: 'Sem refresh_token' }
+  }
+
+  const expInfo = getTokenExpirationInfo(token)
+  
+  // Se expirou ou resta 5 minutos ou menos, executa a renovação preventiva
+  if (expInfo.isExpired || expInfo.remainingMinutes <= 5) {
+    console.log(`⏳ Auto-renovação preventiva: token expira em ${expInfo.remainingMinutes} min. Renovando agora...`)
+    const result = await refreshContaAzulAccessToken(targetClient)
+    return {
+      shouldRenew: true,
+      success: result.success,
+      accessToken: result.accessToken,
+      error: result.error
+    }
+  }
+
+  return { shouldRenew: false, remainingMinutes: expInfo.remainingMinutes }
 }
 
 /**
@@ -499,7 +605,7 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
   
   if (tokenInfo.isExpired) {
     onProgress({ step: 'refresh', message: `Token expirado (60m). Tentando renovação automática via OAuth2...`, progress: 25 })
-    const refreshResult = await refreshContaAzulAccessToken()
+    const refreshResult = await refreshContaAzulAccessToken(targetClient)
     if (refreshResult.success && refreshResult.accessToken) {
       clientToken = refreshResult.accessToken
     } else {

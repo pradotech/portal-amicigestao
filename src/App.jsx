@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Navbar } from './components/Navbar'
 import { Sidebar } from './components/Sidebar'
 import { LandingCompanySelectView } from './views/LandingCompanySelectView'
@@ -36,8 +36,11 @@ import {
   getTokenExpirationInfo,
   isContaAzulTokenExpired,
   buildContaAzulAuthUrl,
-  exchangeContaAzulCodeForToken
+  exchangeContaAzulCodeForToken,
+  refreshContaAzulAccessToken,
+  checkAndAutoRenewToken
 } from './services/contaAzulService'
+import { RefreshCw } from 'lucide-react'
 
 export function App() {
   // Lista de Empresas / Clientes cadastrados no Supabase
@@ -56,8 +59,10 @@ export function App() {
   
   // Sincronização Conta Azul
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isRenewingToken, setIsRenewingToken] = useState(false)
   const [syncProgress, setSyncProgress] = useState(null)
   const [syncToast, setSyncToast] = useState(null)
+  const failedRefreshTokensRef = useRef(new Set())
 
   // Status Supabase & Usuário Conectado
   const [supabaseConfigured, setSupabaseConfigured] = useState(false)
@@ -74,13 +79,102 @@ export function App() {
 
   // Reavalia as credenciais da Conta Azul a cada atualização de token
   const tokenConfig = getContaAzulGlobalConfig()
-  const tokenInfo = getTokenExpirationInfo()
+  const tokenInfo = getTokenExpirationInfo(selectedClient?.contaAzulConfig?.accessToken || tokenConfig.accessToken)
 
   const handleLogout = async () => {
     await signOutSupabase()
     setCurrentUser(null)
     localStorage.removeItem('amici_user_session')
   }
+
+  // Renovação Manual Automática (via OAuth2 Refresh Token)
+  const handleManualAutoRenew = async () => {
+    failedRefreshTokensRef.current.clear()
+    setIsRenewingToken(true)
+    setSyncToast('🔄 Renovando token automaticamente via Conta Azul OAuth2...')
+    try {
+      const res = await refreshContaAzulAccessToken(selectedClient)
+      if (res.success) {
+        setTokenVersion(v => v + 1)
+        setSyncToast('✓ Sessão Conta Azul renovada com sucesso! Atualizando dados...')
+        setTimeout(() => {
+          handleSyncApi()
+        }, 400)
+      } else {
+        console.warn('Erro ao renovar token:', res.error)
+        setSyncToast(`Aviso: ${res.error || 'Não foi possível renovar automaticamente. Cole o novo token.'}`)
+        setShowRenewModal(true)
+      }
+    } catch (e) {
+      setSyncToast(`Erro ao renovar: ${e.message}`)
+      setShowRenewModal(true)
+    } finally {
+      setIsRenewingToken(false)
+    }
+  }
+
+  // Monitoramento e Renovação Automática Proativa em Segundo Plano (Auto-Refresh)
+  useEffect(() => {
+    let isChecking = false
+
+    const runAutoRefreshCheck = async () => {
+      if (isChecking) return
+      isChecking = true
+      try {
+        const config = getContaAzulGlobalConfig()
+        const token = selectedClient?.contaAzulConfig?.accessToken || config.accessToken
+        const refreshToken = selectedClient?.contaAzulConfig?.refreshToken || config.refreshToken
+
+        if (refreshToken && !failedRefreshTokensRef.current.has(refreshToken)) {
+          const expInfo = getTokenExpirationInfo(token)
+          // Se expirado ou faltar 5 min ou menos, renova preventivamente em background
+          if (expInfo.isExpired || (expInfo.remainingMinutes !== null && expInfo.remainingMinutes <= 5)) {
+            console.log('🔄 Executando renovação automática de token em background...')
+            const res = await refreshContaAzulAccessToken(selectedClient)
+            if (res.success) {
+              setTokenVersion(v => v + 1)
+              setSyncToast('✓ Sessão Conta Azul renovada automaticamente em segundo plano!')
+            } else {
+              // Marca este refresh_token como falho para não repetir em loop
+              failedRefreshTokensRef.current.add(refreshToken)
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Erro na checagem de auto-refresh:', err)
+      } finally {
+        isChecking = false
+      }
+    }
+
+    // Checar imediatamente ao montar ou mudar cliente/versão
+    runAutoRefreshCheck()
+
+    // Checagem periódica a cada 30 segundos
+    const interval = setInterval(runAutoRefreshCheck, 30000)
+
+    // Checar ao voltar para a aba
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        runAutoRefreshCheck()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('focus', runAutoRefreshCheck)
+
+    // Ouvir evento disparado globalmente
+    const handleTokenRefreshed = () => {
+      setTokenVersion(v => v + 1)
+    }
+    window.addEventListener('amici_token_refreshed', handleTokenRefreshed)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('focus', runAutoRefreshCheck)
+      window.removeEventListener('amici_token_refreshed', handleTokenRefreshed)
+    }
+  }, [selectedClient?.id, tokenVersion])
 
   // Interceptar retorno do fluxo OAuth da Conta Azul caso venha na URL (code ou access_token)
   useEffect(() => {
@@ -440,11 +534,20 @@ export function App() {
               <>
                 <button
                   type="button"
-                  onClick={() => setShowRenewModal(true)}
-                  className="text-[11px] px-3 py-1 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold flex items-center gap-1.5 shadow-md shadow-amber-950/40 transition-all active:scale-95"
+                  onClick={handleManualAutoRenew}
+                  disabled={isRenewingToken}
+                  className="text-[11px] px-3.5 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-950/40 transition-all active:scale-95 disabled:opacity-50"
+                  title="Renovar token imediatamente utilizando OAuth2 Refresh Token"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                  <span>Renovar Sessão / Colar Token</span>
+                  <RefreshCw className={`w-3 h-3 ${isRenewingToken ? 'animate-spin' : ''}`} />
+                  <span>{isRenewingToken ? 'Renovando...' : 'Renovar Automaticamente Agora'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRenewModal(true)}
+                  className="text-[11px] px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-amber-800/40 font-semibold flex items-center gap-1.5 transition-all"
+                >
+                  <span>Colar Token (Manual)</span>
                 </button>
                 <button
                   type="button"

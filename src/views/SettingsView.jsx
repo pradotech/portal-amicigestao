@@ -16,17 +16,38 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { getSupabaseCredentials, saveSupabaseCredentials, testSupabaseConnection } from '../services/supabase'
-import { getContaAzulGlobalConfig, saveContaAzulGlobalConfig, buildContaAzulAuthUrl, getTokenExpirationInfo } from '../services/contaAzulService'
+import {
+  getContaAzulGlobalConfig,
+  saveContaAzulGlobalConfig,
+  buildContaAzulAuthUrl,
+  getTokenExpirationInfo,
+  refreshContaAzulAccessToken
+} from '../services/contaAzulService'
 import { RenewTokenModal } from '../components/RenewTokenModal'
 
 export function SettingsView({ onResetDemoData }) {
   const [supabaseCreds, setSupabaseCreds] = useState(getSupabaseCredentials())
   const [contaAzulConfig, setContaAzulConfig] = useState(getContaAzulGlobalConfig())
   const [isTestingSupabase, setIsTestingSupabase] = useState(false)
+  const [isRenewingToken, setIsRenewingToken] = useState(false)
   const [supabaseStatus, setSupabaseStatus] = useState(null)
   const [copiedSql, setCopiedSql] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [showRenewModal, setShowRenewModal] = useState(false)
+
+  const handleRenewTokenNow = async () => {
+    setIsRenewingToken(true)
+    setSaveMessage('Tentando renovar token via OAuth2 Refresh Token...')
+    const res = await refreshContaAzulAccessToken()
+    setIsRenewingToken(false)
+    if (res.success && res.accessToken) {
+      setContaAzulConfig(getContaAzulGlobalConfig())
+      setSaveMessage('✓ Token renovado automaticamente com sucesso!')
+      setTimeout(() => setSaveMessage(''), 4000)
+    } else {
+      setSaveMessage(`⚠️ ${res.error || 'Falha ao renovar token'}`)
+    }
+  }
 
   const tokenExpInfo = getTokenExpirationInfo(contaAzulConfig.accessToken)
   const isDefaultClientId = contaAzulConfig.clientId === '510utbibu9gb6002lerhav28tk'
@@ -264,13 +285,25 @@ CREATE TABLE IF NOT EXISTS public.payables (
                 <label className="block text-xs font-semibold text-slate-300">
                   Access Token da Conta Azul (JWT)
                 </label>
-                {tokenExpInfo.expiresAt && (
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                    tokenExpInfo.isExpired ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                  }`}>
-                    {tokenExpInfo.isExpired ? 'Expirado' : `Válido até ${tokenExpInfo.expiresAt}`}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRenewTokenNow}
+                    disabled={isRenewingToken}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 hover:bg-cyan-900 transition-colors flex items-center gap-1"
+                    title="Testar renovação automática com o Refresh Token"
+                  >
+                    <RefreshCw className={`w-2.5 h-2.5 ${isRenewingToken ? 'animate-spin' : ''}`} />
+                    <span>{isRenewingToken ? 'Renovando...' : 'Renovar Agora'}</span>
+                  </button>
+                  {tokenExpInfo.expiresAt && (
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                      tokenExpInfo.isExpired ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                    }`}>
+                      {tokenExpInfo.isExpired ? 'Expirado' : `Válido até ${tokenExpInfo.expiresAt}`}
+                    </span>
+                  )}
+                </div>
               </div>
               <textarea
                 rows="2"

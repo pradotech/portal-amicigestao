@@ -692,3 +692,37 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
     return false
   }
 }
+
+/**
+ * Atualiza os tokens da integração Conta Azul diretamente no Supabase
+ */
+export async function updateContaAzulIntegrationToken(clientId, accessToken, refreshToken, companyId, userEmail) {
+  const supabase = getSupabaseClient()
+  if (!supabase) return false
+
+  const resolvedClientId = clientId || 'd0000000-0000-0000-0000-000000000001'
+
+  try {
+    const { error } = await supabase.from('conta_azul_integrations').upsert({
+      client_id: resolvedClientId,
+      ca_company_id: companyId || localStorage.getItem('amici_ca_company_id') || '3272538',
+      ca_client_id: localStorage.getItem('amici_ca_client_id') || '510utbibu9gb6002lerhav28tk',
+      user_email: userEmail || localStorage.getItem('amici_ca_user_email') || 'drilex.fin@amicigestao.com.br',
+      access_token: accessToken || '',
+      refresh_token: refreshToken || '',
+      connection_status: 'connected',
+      last_sync_at: new Date().toISOString()
+    }, { onConflict: 'client_id' })
+
+    if (error) {
+      console.warn('Erro ao atualizar token no Supabase:', error.message)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.warn('Aviso ao atualizar conta_azul_integrations no Supabase:', err.message)
+    return false
+  }
+}
+
