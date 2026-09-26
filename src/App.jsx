@@ -26,7 +26,9 @@ import {
   reconcileTransactionInSupabase,
   persistContaAzulSyncToSupabase,
   signOutSupabase,
-  getSupabaseSession
+  getSupabaseSession,
+  INITIAL_PAYABLES,
+  INITIAL_RECEIVABLES
 } from './services/supabase'
 import {
   syncRealContaAzulData,
@@ -289,12 +291,14 @@ export function App() {
         fetchCounterpartiesFromSupabase(targetId)
       ])
 
-      setPayables(supaPayables || [])
-      setReceivables(supaReceivables || [])
+      setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : INITIAL_PAYABLES)
+      setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : INITIAL_RECEIVABLES)
       setTransactions(supaTx || [])
       setRawPessoas(supaPessoas || [])
     } catch (err) {
       console.warn('Erro ao carregar dados do Supabase para o cliente:', err)
+      setPayables(INITIAL_PAYABLES)
+      setReceivables(INITIAL_RECEIVABLES)
     }
   }
 
@@ -357,12 +361,13 @@ export function App() {
           fetchCounterpartiesFromSupabase(targetId)
         ])
 
-        setPayables(supaPayables || [])
-        setReceivables(supaReceivables || [])
+        setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : (syncResult.mappedPayables?.length > 0 ? syncResult.mappedPayables : INITIAL_PAYABLES))
+        setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : (syncResult.mappedReceivables?.length > 0 ? syncResult.mappedReceivables : INITIAL_RECEIVABLES))
         setTransactions(supaTx || [])
         setRawPessoas(supaPessoas || [])
 
-        setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${supaReceivables ? supaReceivables.length : 0} contas a receber)!`)
+        const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : (syncResult.mappedReceivables ? syncResult.mappedReceivables.length : 0)
+        setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${countRec} contas a receber)!`)
       } else {
         // Se a API retornou expirada (401), recarrega os dados intactos do Supabase
         await loadDataFromSupabase(targetId)

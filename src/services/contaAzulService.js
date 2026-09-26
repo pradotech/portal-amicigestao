@@ -360,15 +360,17 @@ export async function fetchAllRecentContaAzulVendas(tokenOverride) {
   }
 
   const allVendasList = Array.from(allReceivablesMap.values())
-  if (allVendasList.length === 0) return []
 
-  // 3. Detalhamento determinístico das vendas que necessitam de parcelas ou data de vencimento real
-  const vendasParaDetalhar = allVendasList.filter(v =>
-    !v.condicao_pagamento && !v.parcelas && !v.parcelas_financeiras && v.id
-  )
+  // 3. Detalhamento seguro e ordenado das vendas recentes (2026) para extrair parcelas reais sem estourar rate limit
+  const vendasParaDetalhar = allVendasList.filter(v => {
+    if (!v || !v.id) return false
+    const dateStr = String(v.emissao || v.data || v.data_emissao || v.data_venda || '')
+    const isRecent = dateStr.startsWith('2026') || Number(v.numero) >= 1500
+    return isRecent && !v.condicao_pagamento && !v.parcelas && !v.parcelas_financeiras
+  })
 
   const detailedVendasMap = new Map()
-  const CHUNK_SIZE = 20
+  const CHUNK_SIZE = 8
   for (let i = 0; i < vendasParaDetalhar.length; i += CHUNK_SIZE) {
     const chunk = vendasParaDetalhar.slice(i, i + CHUNK_SIZE)
     const details = await Promise.all(
@@ -386,6 +388,10 @@ export async function fetchAllRecentContaAzulVendas(tokenOverride) {
     details.forEach(d => {
       if (d && d.id) detailedVendasMap.set(String(d.id), d)
     })
+    // Micro delay de 80ms entre chunks para respeitar rate limit da API Conta Azul
+    if (i + CHUNK_SIZE < vendasParaDetalhar.length) {
+      await new Promise(r => setTimeout(r, 80))
+    }
   }
 
   return allVendasList.map(v => (v.id && detailedVendasMap.get(String(v.id))) || v)
@@ -843,6 +849,14 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
         r.sacado ||
         'Cliente'
 
+      const saleDate =
+        extractDate(r.emissao) ||
+        extractDate(r.data_emissao) ||
+        extractDate(r.data) ||
+        extractDate(r.data_venda) ||
+        extractDate(r.data_competencia) ||
+        extractDate(r.created_at)
+
       const receiptDate =
         extractDate(r.data_recebimento) ||
         extractDate(r.data_pagamento) ||
@@ -855,7 +869,9 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
         extractDate(r.vencimento) ||
         extractDate(r.due_date) ||
         extractDate(r.data_previsao) ||
-        (receiptDate ? receiptDate : (extractDate(r.data_competencia) || extractDate(r.data_emissao) || todayStr))
+        receiptDate ||
+        saleDate ||
+        todayStr
 
       const rawAmount = Number(r.valor || r.total || r.valor_total || r.valor_bruto || r.valor_original || r.valor_liquido || 0)
       let amountRemaining = Number(r.valor_em_aberto || r.saldo || r.a_receber || r.valor_pendente || r.valor_restante || 0)
@@ -929,11 +945,14 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
 
       if (rawParcelas && rawParcelas.length > 0) {
         rawParcelas.forEach((p, pIdx) => {
+          const pSaleDate = extractDate(p.emissao) || extractDate(p.data) || saleDate
           const pDueDate =
             extractDate(p.data_vencimento) ||
             extractDate(p.vencimento) ||
             extractDate(p.due_date) ||
             extractDate(p.data_previsao) ||
+            receiptDate ||
+            pSaleDate ||
             dueDate
 
           const pAmount = Number(p.valor || p.total || p.valor_parcela || (rawAmount / rawParcelas.length) || 0)
@@ -946,6 +965,8 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
             pStatusRaw.includes('QUITAD') ||
             pStatusRaw.includes('PAGO') ||
             pStatusRaw.includes('LIQUIDADO') ||
+            pStatusRaw.includes('CONCRETIZAD') ||
+            pStatusRaw.includes('FATURAD') ||
             Boolean(p.data_recebimento || p.data_pagamento)
 
           const pIsPartial = pStatusRaw.includes('PARCIAL') || (pAmountPaid > 0 && pAmountRemaining > 0)
