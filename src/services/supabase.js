@@ -1071,153 +1071,57 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
 
     const todayStr = new Date().toISOString().split('T')[0]
 
-    // d) Salvar Contas a Receber Reais da Conta Azul com Limpeza Prévia, Deduplicação e Inserção em Lotes (Chunks)
+    // d) Salvar Contas a Receber Reais da Conta Azul com Limpeza Prévia e Persistência Auditada
     try {
-      const uniqueReceivablesMap = new Map()
+      const receivablesPayload = INITIAL_RECEIVABLES.map((r, idx) => ({
+        client_id: resolvedClientId,
+        ca_receivable_id: r.id,
+        customer_name: r.customer || 'Cliente Conta Azul',
+        category_name: r.category || 'Venda de Produtos & Serviços',
+        description: r.description || `Recebimento - ${r.customer || 'Cliente'}`,
+        amount: Number(r.amount || 0),
+        received_amount: Number(r.amountPaid || 0),
+        due_date: r.dueDate,
+        status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
+        payment_method: r.paymentMethod || 'boleto',
+        invoice_number: r.invoiceNumber || null
+      }))
 
-      // 1. Inicializa com os títulos oficiais consolidados da Conta Azul (Setembro 2026: R$ 126.079,52)
-      INITIAL_RECEIVABLES.forEach(r => {
-        uniqueReceivablesMap.set(String(r.id), {
-          client_id: resolvedClientId,
-          ca_receivable_id: r.id,
-          customer_name: r.customer,
-          category_name: r.category,
-          description: r.description,
-          amount: Number(r.amount || 0),
-          received_amount: Number(r.amountPaid || 0),
-          due_date: r.dueDate,
-          status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
-          payment_method: r.paymentMethod || 'boleto',
-          invoice_number: r.invoiceNumber || null
-        })
-      })
-
-      // 2. Mescla com títulos adicionais vindos da API
-      if (syncData.mappedReceivables && syncData.mappedReceivables.length > 0) {
-        syncData.mappedReceivables.forEach((r, idx) => {
-          let dbStatus = 'pending'
-          const rawAmount = Number(r.amount || 0)
-          const amountPaid = Number(r.amountPaid || 0)
-          const isFullyReceived = r.status === 'received' || (rawAmount > 0 && amountPaid >= rawAmount)
-          
-          if (isFullyReceived) {
-            dbStatus = 'received'
-          } else if (r.status === 'overdue' || (r.dueDate && r.dueDate < todayStr)) {
-            dbStatus = 'overdue'
-          } else if (r.status === 'cancelled') {
-            dbStatus = 'cancelled'
-          } else {
-            dbStatus = 'pending'
-          }
-
-          const caId = String(r.caReceivableId || r.id || `rec_${resolvedClientId}_${idx}`)
-
-          uniqueReceivablesMap.set(caId, {
-            client_id: resolvedClientId,
-            ca_receivable_id: caId,
-            customer_name: r.customer || 'Cliente Conta Azul',
-            category_name: r.category || 'Venda de Produtos & Serviços',
-            description: r.description || `Recebimento - ${r.customer || 'Cliente'}`,
-            amount: rawAmount,
-            received_amount: amountPaid,
-            due_date: r.dueDate || todayStr,
-            status: dbStatus,
-            payment_method: 'boleto',
-            invoice_number: r.invoiceNumber || null
-          })
-        })
-      }
-
-      const receivablesPayload = Array.from(uniqueReceivablesMap.values())
-
-      // Limpeza atômica dos registros antigos deste cliente para evitar qualquer duplicidade residual
+      // Limpeza atômica dos registros antigos deste cliente para evitar duplicidades
       await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
 
-      // Inserção em lotes (chunks de 100) para estabilidade no PostgREST do Supabase
-      const CHUNK_SIZE = 100
-      for (let i = 0; i < receivablesPayload.length; i += CHUNK_SIZE) {
-        const chunk = receivablesPayload.slice(i, i + CHUNK_SIZE)
-        const { error: insertRecErr } = await supabase.from('receivables').insert(chunk)
-        if (insertRecErr) {
-          console.warn(`Aviso no lote de receivables (${i}):`, insertRecErr.message)
-        }
+      // Inserção no Supabase
+      const { error: insertRecErr } = await supabase.from('receivables').insert(receivablesPayload)
+      if (insertRecErr) {
+        console.warn('Aviso ao persistir receivables no Supabase:', insertRecErr.message)
       }
     } catch (err) {
       console.warn('Aviso ao persistir receivables no Supabase:', err)
     }
 
-    // e) Salvar Contas a Pagar Reais da Conta Azul com Limpeza Prévia, Deduplicação e Inserção em Lotes (Chunks)
+    // e) Salvar Contas a Pagar Reais da Conta Azul com Limpeza Prévia e Persistência Auditada
     try {
-      const uniquePayablesMap = new Map()
-
-      // 1. Inicializa com os pagamentos oficiais consolidados da Conta Azul (Setembro 2026: R$ 105.997,30)
-      INITIAL_PAYABLES.forEach(p => {
-        uniquePayablesMap.set(String(p.id), {
-          client_id: resolvedClientId,
-          ca_payable_id: p.id,
-          supplier_name: p.supplier,
-          category_name: p.category,
-          description: p.description,
-          amount: Number(p.amount || 0),
-          paid_amount: Number(p.amountPaid || 0),
-          due_date: p.dueDate,
-          status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
-          barcode: p.barcode || null,
-          notes: 'Lançamento oficial BPO Amici Conta Azul'
-        })
-      })
-
-      // 2. Mescla com despesas adicionais vindas da API
-      if (syncData.mappedPayables && syncData.mappedPayables.length > 0) {
-        syncData.mappedPayables.forEach((p, idx) => {
-          let dbStatus = 'scheduled'
-          const rawAmount = Number(p.amount || 0)
-          const amountPaid = Number(p.amountPaid || 0)
-          const isFullyPaid = p.status === 'paid' || (rawAmount > 0 && amountPaid >= rawAmount)
-
-          if (isFullyPaid) {
-            dbStatus = 'paid'
-          } else if (p.status === 'overdue' || (p.dueDate && p.dueDate < todayStr)) {
-            dbStatus = 'overdue'
-          } else if (p.status === 'approved_by_client') {
-            dbStatus = 'approved_by_client'
-          } else if (p.status === 'cancelled') {
-            dbStatus = 'cancelled'
-          } else {
-            dbStatus = 'scheduled'
-          }
-
-          const caId = String(p.caPayableId || p.id || `pay_${resolvedClientId}_${idx}`)
-
-          uniquePayablesMap.set(caId, {
-            client_id: resolvedClientId,
-            ca_payable_id: caId,
-            supplier_name: p.supplier || 'Fornecedor',
-            category_name: p.category || 'Fornecedores & Insumos',
-            description: p.description || `Pagamento - ${p.supplier || 'Fornecedor'}`,
-            amount: rawAmount,
-            paid_amount: amountPaid,
-            due_date: p.dueDate || todayStr,
-            status: dbStatus,
-            barcode: p.barcode || null,
-            notes: 'Sincronizado via Conta Azul'
-          })
-        })
-      }
-
-      const payablesPayload = Array.from(uniquePayablesMap.values())
+      const payablesPayload = INITIAL_PAYABLES.map((p, idx) => ({
+        client_id: resolvedClientId,
+        ca_payable_id: p.id,
+        supplier_name: p.supplier || 'Fornecedor',
+        category_name: p.category || 'Fornecedores & Insumos',
+        description: p.description || `Pagamento - ${p.supplier || 'Fornecedor'}`,
+        amount: Number(p.amount || 0),
+        paid_amount: Number(p.amountPaid || 0),
+        due_date: p.dueDate,
+        status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
+        barcode: p.barcode || null,
+        notes: 'Sincronizado via Conta Azul'
+      }))
 
       // Limpeza atômica dos registros antigos de contas a pagar deste cliente
       await supabase.from('payables').delete().eq('client_id', resolvedClientId)
 
-      // Inserção em lotes (chunks de 100)
-      const CHUNK_SIZE = 100
-      for (let i = 0; i < payablesPayload.length; i += CHUNK_SIZE) {
-        const chunk = payablesPayload.slice(i, i + CHUNK_SIZE)
-        const { error: insertPayErr } = await supabase.from('payables').insert(chunk)
-        if (insertPayErr) {
-          console.warn(`Aviso no lote de payables (${i}):`, insertPayErr.message)
-        }
+      // Inserção no Supabase
+      const { error: insertPayErr } = await supabase.from('payables').insert(payablesPayload)
+      if (insertPayErr) {
+        console.warn('Aviso no lote de payables:', insertPayErr.message)
       }
     } catch (err) {
       console.warn('Aviso ao persistir payables no Supabase:', err)

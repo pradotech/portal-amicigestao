@@ -338,14 +338,6 @@ export function App() {
           setRawPessoas(pessoas)
         }
 
-        if (syncResult.mappedReceivables && syncResult.mappedReceivables.length > 0) {
-          setReceivables(syncResult.mappedReceivables)
-        }
-
-        if (syncResult.mappedPayables && syncResult.mappedPayables.length > 0) {
-          setPayables(syncResult.mappedPayables)
-        }
-
         // Persiste as entidades cadastrais e conexão no banco Supabase
         await saveClientToSupabase(targetClient)
         await persistContaAzulSyncToSupabase(targetId, {
@@ -361,12 +353,12 @@ export function App() {
           fetchCounterpartiesFromSupabase(targetId)
         ])
 
-        setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : (syncResult.mappedPayables?.length > 0 ? syncResult.mappedPayables : INITIAL_PAYABLES))
-        setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : (syncResult.mappedReceivables?.length > 0 ? syncResult.mappedReceivables : INITIAL_RECEIVABLES))
+        setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : INITIAL_PAYABLES)
+        setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : INITIAL_RECEIVABLES)
         setTransactions(supaTx || [])
         setRawPessoas(supaPessoas || [])
 
-        const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : (syncResult.mappedReceivables ? syncResult.mappedReceivables.length : 0)
+        const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : INITIAL_RECEIVABLES.length
         setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${countRec} contas a receber)!`)
       } else {
         // Se a API retornou expirada (401), recarrega os dados intactos do Supabase
