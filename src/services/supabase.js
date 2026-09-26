@@ -659,10 +659,12 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
 
     const todayStr = new Date().toISOString().split('T')[0]
 
-    // d) Salvar Contas a Receber Reais da Conta Azul
+    // d) Salvar Contas a Receber Reais da Conta Azul com Limpeza Prévia, Deduplicação e Inserção em Lotes (Chunks)
     if (syncData.mappedReceivables && syncData.mappedReceivables.length > 0) {
       try {
-        const receivablesPayload = syncData.mappedReceivables.map(r => {
+        const uniqueReceivablesMap = new Map()
+        
+        syncData.mappedReceivables.forEach((r, idx) => {
           let dbStatus = 'pending'
           const rawAmount = Number(r.amount || 0)
           const amountPaid = Number(r.amountPaid || 0)
@@ -678,9 +680,11 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
             dbStatus = 'pending'
           }
 
-          return {
+          const caId = String(r.caReceivableId || r.id || `rec_${resolvedClientId}_${idx}`)
+
+          uniqueReceivablesMap.set(caId, {
             client_id: resolvedClientId,
-            ca_receivable_id: String(r.caReceivableId || r.id),
+            ca_receivable_id: caId,
             customer_name: r.customer || 'Cliente Conta Azul',
             category_name: r.category || 'Venda de Produtos & Serviços',
             description: r.description || `Recebimento - ${r.customer || 'Cliente'}`,
@@ -690,24 +694,34 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
             status: dbStatus,
             payment_method: 'boleto',
             invoice_number: r.invoiceNumber || null
-          }
+          })
         })
 
-        const { error: insertRecErr } = await supabase.from('receivables').upsert(receivablesPayload, { onConflict: 'client_id, ca_receivable_id' })
-        if (insertRecErr) {
-          // Fallback de substituição se upsert falhar por falta de unique constraint
-          await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
-          await supabase.from('receivables').insert(receivablesPayload)
+        const receivablesPayload = Array.from(uniqueReceivablesMap.values())
+
+        // Limpeza atômica dos registros antigos deste cliente para evitar qualquer duplicidade residual
+        await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
+
+        // Inserção em lotes (chunks de 100) para estabilidade no PostgREST do Supabase
+        const CHUNK_SIZE = 100
+        for (let i = 0; i < receivablesPayload.length; i += CHUNK_SIZE) {
+          const chunk = receivablesPayload.slice(i, i + CHUNK_SIZE)
+          const { error: insertRecErr } = await supabase.from('receivables').insert(chunk)
+          if (insertRecErr) {
+            console.warn(`Aviso no lote de receivables (${i}):`, insertRecErr.message)
+          }
         }
       } catch (err) {
         console.warn('Aviso ao persistir receivables no Supabase:', err)
       }
     }
 
-    // e) Salvar Contas a Pagar Reais da Conta Azul
+    // e) Salvar Contas a Pagar Reais da Conta Azul com Limpeza Prévia, Deduplicação e Inserção em Lotes (Chunks)
     if (syncData.mappedPayables && syncData.mappedPayables.length > 0) {
       try {
-        const payablesPayload = syncData.mappedPayables.map(p => {
+        const uniquePayablesMap = new Map()
+
+        syncData.mappedPayables.forEach((p, idx) => {
           let dbStatus = 'scheduled'
           const rawAmount = Number(p.amount || 0)
           const amountPaid = Number(p.amountPaid || 0)
@@ -725,9 +739,11 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
             dbStatus = 'scheduled'
           }
 
-          return {
+          const caId = String(p.caPayableId || p.id || `pay_${resolvedClientId}_${idx}`)
+
+          uniquePayablesMap.set(caId, {
             client_id: resolvedClientId,
-            ca_payable_id: String(p.caPayableId || p.id),
+            ca_payable_id: caId,
             supplier_name: p.supplier || 'Fornecedor',
             category_name: p.category || 'Fornecedores & Insumos',
             description: p.description || `Pagamento - ${p.supplier || 'Fornecedor'}`,
@@ -737,14 +753,22 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
             status: dbStatus,
             barcode: p.barcode || null,
             notes: 'Sincronizado via Conta Azul'
-          }
+          })
         })
 
-        const { error: insertPayErr } = await supabase.from('payables').upsert(payablesPayload, { onConflict: 'client_id, ca_payable_id' })
-        if (insertPayErr) {
-          // Fallback de substituição se upsert falhar por falta de unique constraint
-          await supabase.from('payables').delete().eq('client_id', resolvedClientId)
-          await supabase.from('payables').insert(payablesPayload)
+        const payablesPayload = Array.from(uniquePayablesMap.values())
+
+        // Limpeza atômica dos registros antigos de contas a pagar deste cliente
+        await supabase.from('payables').delete().eq('client_id', resolvedClientId)
+
+        // Inserção em lotes (chunks de 100)
+        const CHUNK_SIZE = 100
+        for (let i = 0; i < payablesPayload.length; i += CHUNK_SIZE) {
+          const chunk = payablesPayload.slice(i, i + CHUNK_SIZE)
+          const { error: insertPayErr } = await supabase.from('payables').insert(chunk)
+          if (insertPayErr) {
+            console.warn(`Aviso no lote de payables (${i}):`, insertPayErr.message)
+          }
         }
       } catch (err) {
         console.warn('Aviso ao persistir payables no Supabase:', err)
