@@ -19,7 +19,9 @@ import {
   Sparkles,
   Printer,
   CheckCircle2,
-  HelpCircle
+  HelpCircle,
+  Info,
+  Calculator
 } from 'lucide-react'
 import {
   PieChart,
@@ -39,6 +41,98 @@ import {
 import { formatCurrency, formatDate } from '../utils/formatters'
 
 const EXPENSE_COLORS = ['#0077B6', '#0096C7', '#48CAE4', '#90E0EF', '#0284C7', '#38BDF8', '#818CF8', '#6366F1', '#10B981', '#F59E0B']
+
+function DreCardTooltip({
+  title,
+  formula,
+  breakdown = [],
+  calculation,
+  explanation,
+  align = 'left'
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsOpen(prev => !prev)
+        }}
+        className="p-1 rounded-lg text-slate-400 hover:text-sky-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none"
+        title="Ver memória de cálculo"
+        aria-label="Ver memória de cálculo"
+      >
+        <Info className="w-3.5 h-3.5" />
+      </button>
+
+      {isOpen && (
+        <div
+          className={`absolute ${align === 'right' ? 'right-0 sm:-right-4' : 'left-0 sm:-left-4'} top-full mt-2 w-80 sm:w-96 p-4 rounded-2xl bg-slate-900/95 dark:bg-slate-950 border border-slate-700/80 shadow-2xl text-white text-xs z-50 backdrop-blur-md space-y-3 animate-in fade-in zoom-in-95 duration-150 text-left`}
+        >
+          {/* Cabeçalho do Tooltip */}
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-2 font-bold text-cyan-400 text-xs">
+              <Calculator className="w-3.5 h-3.5" />
+              <span>{title}</span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-mono">Memória Amici</span>
+          </div>
+
+          {/* Fórmula Teórica */}
+          <div className="p-2 rounded-xl bg-slate-800/80 border border-slate-700/50 space-y-1">
+            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Fórmula:</span>
+            <div className="font-mono text-[11px] text-sky-300 font-semibold">{formula}</div>
+          </div>
+
+          {/* Valores Reais Passo a Passo */}
+          {breakdown.length > 0 && (
+            <div className="space-y-1.5 text-[11px] font-mono">
+              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider font-sans">
+                Valores Apurados no Período:
+              </div>
+              <div className="space-y-1 p-2 rounded-xl bg-slate-950/60 border border-slate-800/60">
+                {breakdown.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between ${
+                      item.isTotal ? 'pt-1.5 mt-1 border-t border-slate-700/60 font-bold text-cyan-300' : 'text-slate-300'
+                    }`}
+                  >
+                    <span className={item.isDeduction ? 'text-rose-300' : ''}>{item.label}</span>
+                    <span className={item.isDeduction ? 'text-rose-300 font-bold' : item.isTotal ? 'text-cyan-300 font-extrabold' : 'text-slate-200'}>
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Conta Final Executada */}
+          {calculation && (
+            <div className="p-2 rounded-xl bg-cyan-950/40 border border-cyan-800/50 flex items-center justify-between font-mono text-[11px]">
+              <span className="text-cyan-200 font-medium">Aplicação:</span>
+              <strong className="text-cyan-300 font-bold">{calculation}</strong>
+            </div>
+          )}
+
+          {/* Explicação Didática */}
+          {explanation && (
+            <p className="text-[11px] text-slate-400 leading-relaxed font-sans pt-1 border-t border-slate-800/60">
+              💡 {explanation}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function DreReportsView({ clients = [], selectedClientId, payables = [], receivables = [] }) {
   const [selectedMonth, setSelectedMonth] = useState('2026-09')
@@ -1063,9 +1157,25 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         
         {/* Card 1: Margem Bruta */}
-        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2 relative">
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            <span>Margem Bruta</span>
+            <div className="flex items-center gap-1.5">
+              <span>Margem Bruta</span>
+              <DreCardTooltip
+                title="Memória de Cálculo • Margem Bruta"
+                formula="(Lucro Bruto ÷ Receita Bruta) × 100"
+                breakdown={[
+                  { label: '(+) Receita Bruta:', value: formatCurrency(grossRevenue) },
+                  { label: '(-) Impostos & Tributos:', value: formatCurrency(taxes), isDeduction: true },
+                  { label: '(=) Receita Líquida:', value: formatCurrency(netRevenue) },
+                  { label: '(-) Custos Diretos (CMV/CSP):', value: formatCurrency(cogs), isDeduction: true },
+                  { label: '(=) Lucro Bruto Operacional:', value: formatCurrency(grossProfit), isTotal: true }
+                ]}
+                calculation={`(${formatCurrency(grossProfit)} ÷ ${formatCurrency(grossRevenue)}) × 100 = ${grossMargin}%`}
+                explanation="Indica o percentual da receita que sobra após pagar os tributos e custos diretos dos produtos/serviços antes das despesas fixas."
+                align="left"
+              />
+            </div>
             <span className="text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded-full border border-sky-200 dark:border-sky-800/60 text-[10px]">AV: {grossMargin}%</span>
           </div>
           <div className="text-3xl font-black text-slate-900 dark:text-white font-mono">
@@ -1078,9 +1188,23 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
         </div>
 
         {/* Card 2: Margem EBITDA */}
-        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2 relative">
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
-            <span>Margem EBITDA</span>
+            <div className="flex items-center gap-1.5">
+              <span>Margem EBITDA</span>
+              <DreCardTooltip
+                title="Memória de Cálculo • Margem EBITDA"
+                formula="(EBITDA ÷ Receita Bruta) × 100"
+                breakdown={[
+                  { label: '(=) Lucro Bruto:', value: formatCurrency(grossProfit) },
+                  { label: '(-) Despesas Operacionais Fixas:', value: formatCurrency(operationalExpensesTotal), isDeduction: true },
+                  { label: '(=) EBITDA Apurado:', value: formatCurrency(ebitda), isTotal: true }
+                ]}
+                calculation={`(${formatCurrency(ebitda)} ÷ ${formatCurrency(grossRevenue)}) × 100 = ${ebitdaMargin}%`}
+                explanation="Mede a capacidade genuína de geração operacional de caixa do negócio, antes do impacto de tarifas bancárias e juros."
+                align="left"
+              />
+            </div>
             <span className="text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/40 px-2 py-0.5 rounded-full border border-cyan-200 dark:border-cyan-800/60 text-[10px]">Operacional</span>
           </div>
           <div className="text-3xl font-black text-cyan-700 dark:text-cyan-400 font-mono">
@@ -1093,9 +1217,23 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
         </div>
 
         {/* Card 3: Margem Líquida */}
-        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2 relative">
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            <span>Margem Líquida</span>
+            <div className="flex items-center gap-1.5">
+              <span>Margem Líquida</span>
+              <DreCardTooltip
+                title="Memória de Cálculo • Margem Líquida"
+                formula="(Lucro Líquido ÷ Receita Bruta) × 100"
+                breakdown={[
+                  { label: '(=) EBITDA Apurado:', value: formatCurrency(ebitda) },
+                  { label: '(-) Despesas Financeiras & Tarifas:', value: formatCurrency(financialExpenses), isDeduction: true },
+                  { label: '(=) Resultado Líquido Final:', value: formatCurrency(netIncome), isTotal: true }
+                ]}
+                calculation={`(${formatCurrency(netIncome)} ÷ ${formatCurrency(grossRevenue)}) × 100 = ${netMargin}%`}
+                explanation="Percentual final que efetivamente se converte em lucro líquido para a empresa após todas as despesas, custos e encargos."
+                align="right"
+              />
+            </div>
             <span className="text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60 text-[10px]">Final</span>
           </div>
           <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
@@ -1108,11 +1246,26 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
         </div>
 
         {/* Card 4: Ponto de Equilíbrio (Break-Even Point) */}
-        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2 relative">
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-            <span className="flex items-center gap-1">
-              <Target className="w-3.5 h-3.5" /> Ponto de Equilíbrio
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1">
+                <Target className="w-3.5 h-3.5" /> Ponto de Equilíbrio
+              </span>
+              <DreCardTooltip
+                title="Memória de Cálculo • Break-Even Point"
+                formula="Custos Fixos Totais ÷ Margem de Contribuição %"
+                breakdown={[
+                  { label: 'Despesas Fixas Operacionais:', value: formatCurrency(operationalExpensesTotal) },
+                  { label: 'Despesas Financeiras:', value: formatCurrency(financialExpenses) },
+                  { label: '(=) Total de Gastos Fixos:', value: formatCurrency(fixedExpenses), isTotal: true },
+                  { label: 'Margem de Contribuição (%):', value: `${(contributionMarginRatio * 100).toFixed(1)}%` }
+                ]}
+                calculation={`${formatCurrency(fixedExpenses)} ÷ ${(contributionMarginRatio * 100).toFixed(1)}% = ${formatCurrency(breakEvenPoint)}`}
+                explanation={`Volume mínimo de faturamento para cobrir 100% dos custos e despesas sem prejuízo. Margem de segurança de ${safetyMarginRatio}% (${formatCurrency(Math.max(0, grossRevenue - breakEvenPoint))} acima do ponto de equilíbrio).`}
+                align="right"
+              />
+            </div>
             <span className="text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800/60 text-[10px] font-bold">
               +{safetyMarginRatio}%
             </span>
