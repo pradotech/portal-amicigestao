@@ -968,37 +968,37 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
     <div className="space-y-6 animate-in fade-in duration-300">
       
       {/* 1. CABEÇALHO COM CONTROLES (TEXTOS NO TOPO E BOTÕES NA LINHA DE BAIXO) */}
-      <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+      <div className="p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         
         {/* Bloco Superior: Título e Identificação da Empresa */}
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-600">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
             <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
             <span>Demonstração de Resultados Contábeis & BPO</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
-            <FileSpreadsheet className="w-7 h-7 text-sky-600 flex-shrink-0" />
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+            <FileSpreadsheet className="w-7 h-7 text-sky-600 dark:text-cyan-400 flex-shrink-0" />
             <span>DRE Gerencial & Demonstrativos</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500">
-            {client?.corporateName || 'Drillex Indústria e Serviços'} • Regime Tributário: <strong className="text-slate-700">{client?.taxRegime || 'Lucro Presumido'}</strong>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+            {client?.corporateName || 'Drillex Indústria e Serviços'} • Regime Tributário: <strong className="text-slate-700 dark:text-slate-300">{client?.taxRegime || 'Lucro Presumido'}</strong>
           </p>
         </div>
 
         {/* Bloco Inferior: Barra de Controles e Botões de Ação */}
-        <div className="no-print print:hidden pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <div className="no-print print:hidden pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
           
           {/* Lado Esquerdo: Filtros de Regime e Competência */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Alternador de Regime (Competência x Caixa) */}
-            <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl border border-slate-200 shadow-inner">
+            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-inner">
               <button
                 type="button"
                 onClick={() => setRegime('competencia')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   regime === 'competencia'
                     ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white font-bold shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 Competência
@@ -1009,7 +1009,7 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   regime === 'caixa'
                     ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white font-bold shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 Caixa
@@ -1020,14 +1020,14 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-sky-900 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer shadow-sm"
+              className="px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-sky-900 dark:text-cyan-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer shadow-sm"
             >
-              <option value="2026-09">Competência: Setembro / 2026</option>
-              <option value="2026-08">Competência: Agosto / 2026</option>
-              <option value="2026-07">Competência: Julho / 2026</option>
-              <option value="2026-06">Competência: Junho / 2026</option>
-              <option value="2026-05">Competência: Maio / 2026</option>
-              <option value="2026-04">Competência: Abril / 2026</option>
+              <option value="2026-09" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Competência: Setembro / 2026</option>
+              <option value="2026-08" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Competência: Agosto / 2026</option>
+              <option value="2026-07" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Competência: Julho / 2026</option>
+              <option value="2026-06" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Competência: Junho / 2026</option>
+              <option value="2026-05" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Competência: Maio / 2026</option>
+              <option value="2026-04" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Competência: Abril / 2026</option>
             </select>
           </div>
 
@@ -1038,9 +1038,9 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
               type="button"
               onClick={handleExportCSV}
               title="Exportar planilha DRE com Análise Vertical e Horizontal"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold transition-all shadow-sm active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white text-xs font-bold transition-all shadow-sm active:scale-95"
             >
-              <Download className="w-3.5 h-3.5 text-sky-600" />
+              <Download className="w-3.5 h-3.5 text-sky-600 dark:text-cyan-400" />
               <span>Exportar CSV</span>
             </button>
 
@@ -1063,81 +1063,81 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         
         {/* Card 1: Margem Bruta */}
-        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500">
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             <span>Margem Bruta</span>
-            <span className="text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200 text-[10px]">AV: {grossMargin}%</span>
+            <span className="text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded-full border border-sky-200 dark:border-sky-800/60 text-[10px]">AV: {grossMargin}%</span>
           </div>
-          <div className="text-3xl font-black text-slate-900 font-mono">
+          <div className="text-3xl font-black text-slate-900 dark:text-white font-mono">
             {grossMargin}%
           </div>
-          <div className="text-xs text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
             <span>Lucro Bruto:</span>
-            <strong className="text-sky-800 font-mono">{formatCurrency(grossProfit)}</strong>
+            <strong className="text-sky-800 dark:text-sky-300 font-mono">{formatCurrency(grossProfit)}</strong>
           </div>
         </div>
 
         {/* Card 2: Margem EBITDA */}
-        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-cyan-600">
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
             <span>Margem EBITDA</span>
-            <span className="text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200 text-[10px]">Operacional</span>
+            <span className="text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/40 px-2 py-0.5 rounded-full border border-cyan-200 dark:border-cyan-800/60 text-[10px]">Operacional</span>
           </div>
-          <div className="text-3xl font-black text-cyan-700 font-mono">
+          <div className="text-3xl font-black text-cyan-700 dark:text-cyan-400 font-mono">
             {ebitdaMargin}%
           </div>
-          <div className="text-xs text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
             <span>EBITDA Apurado:</span>
-            <strong className="text-cyan-800 font-mono">{formatCurrency(ebitda)}</strong>
+            <strong className="text-cyan-800 dark:text-cyan-300 font-mono">{formatCurrency(ebitda)}</strong>
           </div>
         </div>
 
         {/* Card 3: Margem Líquida */}
-        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-600">
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
             <span>Margem Líquida</span>
-            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 text-[10px]">Final</span>
+            <span className="text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60 text-[10px]">Final</span>
           </div>
-          <div className="text-3xl font-black text-emerald-600 font-mono">
+          <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
             {netMargin}%
           </div>
-          <div className="text-xs text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
             <span>Resultado Líquido:</span>
-            <strong className="text-emerald-800 font-mono">{formatCurrency(netIncome)}</strong>
+            <strong className="text-emerald-800 dark:text-emerald-300 font-mono">{formatCurrency(netIncome)}</strong>
           </div>
         </div>
 
         {/* Card 4: Ponto de Equilíbrio (Break-Even Point) */}
-        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-600">
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
             <span className="flex items-center gap-1">
               <Target className="w-3.5 h-3.5" /> Ponto de Equilíbrio
             </span>
-            <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 text-[10px] font-bold">
+            <span className="text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800/60 text-[10px] font-bold">
               +{safetyMarginRatio}%
             </span>
           </div>
-          <div className="text-2xl font-black text-slate-900 font-mono">
+          <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
             {formatCurrency(breakEvenPoint)}
           </div>
-          <div className="text-xs text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
             <span>Margem Segurança:</span>
-            <strong className="text-amber-800 font-mono">{formatCurrency(Math.max(0, grossRevenue - breakEvenPoint))}</strong>
+            <strong className="text-amber-800 dark:text-amber-300 font-mono">{formatCurrency(Math.max(0, grossRevenue - breakEvenPoint))}</strong>
           </div>
         </div>
 
       </div>
 
       {/* 3. TABELA DRE ANALÍTICA COMPLETA COM AV% E AH% */}
-      <div className="p-6 sm:p-7 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+      <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-4">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Demonstração do Resultado Analítica</h2>
-            <p className="text-xs text-slate-500">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Demonstração do Resultado Analítica</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Estrutura Contábil com Análise Vertical (AV%) e Evolução em Relação ao Mês Anterior (AH% MoM).
             </p>
           </div>
-          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 w-fit">
+          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 w-fit">
             Exibição: {regime === 'competencia' ? 'Regime de Competência' : 'Regime de Caixa'}
           </span>
         </div>
@@ -1145,7 +1145,7 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-bold uppercase text-[11px]">
+              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-bold uppercase text-[11px]">
                 <th className="py-3 px-4">Estrutura de Contas Contábeis</th>
                 <th className="py-3 px-4 text-right">Competência {selectedMonth}</th>
                 <th className="py-3 px-3 text-right">AV%</th>
@@ -1153,76 +1153,76 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
                 <th className="py-3 px-3 text-right">AH% (MoM)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               
               {/* 1. RECEITA BRUTA */}
-              <tr className="font-bold text-slate-900 bg-sky-50/40">
+              <tr className="font-bold text-slate-900 dark:text-slate-100 bg-sky-50/40 dark:bg-sky-950/30">
                 <td className="py-3 px-4 flex items-center gap-2">
-                  <span className="text-sky-600 font-black">(+)</span>
+                  <span className="text-sky-600 dark:text-cyan-400 font-black">(+)</span>
                   <span>RECEITA BRUTA DE VENDAS & SERVIÇOS</span>
                 </td>
-                <td className="py-3 px-4 text-right font-mono text-sm text-sky-900 font-extrabold">{formatCurrency(grossRevenue)}</td>
-                <td className="py-3 px-3 text-right font-mono text-slate-600 font-bold">100.0%</td>
-                <td className="py-3 px-4 text-right font-mono text-slate-500">{formatCurrency(prevGrossRevenue)}</td>
-                <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700">{calcAH(grossRevenue, prevGrossRevenue)}</td>
+                <td className="py-3 px-4 text-right font-mono text-sm text-sky-900 dark:text-cyan-300 font-extrabold">{formatCurrency(grossRevenue)}</td>
+                <td className="py-3 px-3 text-right font-mono text-slate-600 dark:text-slate-400 font-bold">100.0%</td>
+                <td className="py-3 px-4 text-right font-mono text-slate-500 dark:text-slate-400">{formatCurrency(prevGrossRevenue)}</td>
+                <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">{calcAH(grossRevenue, prevGrossRevenue)}</td>
               </tr>
 
               {/* 2. DEDUÇÕES E IMPOSTOS */}
-              <tr className="text-slate-600 hover:bg-slate-50/80 transition-colors">
-                <td className="py-2.5 px-4 pl-8 text-slate-700">
+              <tr className="text-slate-600 dark:text-slate-400 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                <td className="py-2.5 px-4 pl-8 text-slate-700 dark:text-slate-300">
                   (-) Deduções da Receita & Tributos (DAS / IRPJ / CSLL / ISS)
                 </td>
-                <td className="py-2.5 px-4 text-right font-mono text-rose-700 font-semibold">({formatCurrency(taxes)})</td>
-                <td className="py-2.5 px-3 text-right font-mono text-slate-500">{calcAV(taxes)}%</td>
-                <td className="py-2.5 px-4 text-right font-mono text-slate-400">({formatCurrency(prevTaxes)})</td>
-                <td className="py-2.5 px-3 text-right font-mono text-slate-600">{calcAH(taxes, prevTaxes)}</td>
+                <td className="py-2.5 px-4 text-right font-mono text-rose-700 dark:text-rose-400 font-semibold">({formatCurrency(taxes)})</td>
+                <td className="py-2.5 px-3 text-right font-mono text-slate-500 dark:text-slate-400">{calcAV(taxes)}%</td>
+                <td className="py-2.5 px-4 text-right font-mono text-slate-400 dark:text-slate-500">({formatCurrency(prevTaxes)})</td>
+                <td className="py-2.5 px-3 text-right font-mono text-slate-600 dark:text-slate-400">{calcAH(taxes, prevTaxes)}</td>
               </tr>
 
               {/* 3. RECEITA OPERACIONAL LÍQUIDA */}
-              <tr className="font-bold text-slate-900 bg-slate-50 border-t-2 border-b-2 border-slate-200">
+              <tr className="font-bold text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800/50 border-t-2 border-b-2 border-slate-200 dark:border-slate-700">
                 <td className="py-3 px-4 pl-6">(=) RECEITA OPERACIONAL LÍQUIDA</td>
-                <td className="py-3 px-4 text-right font-mono text-slate-900">{formatCurrency(netRevenue)}</td>
-                <td className="py-3 px-3 text-right font-mono text-slate-700">{calcAV(netRevenue)}%</td>
-                <td className="py-3 px-4 text-right font-mono text-slate-500">{formatCurrency(prevNetRevenue)}</td>
-                <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700">{calcAH(netRevenue, prevNetRevenue)}</td>
+                <td className="py-3 px-4 text-right font-mono text-slate-900 dark:text-white">{formatCurrency(netRevenue)}</td>
+                <td className="py-3 px-3 text-right font-mono text-slate-700 dark:text-slate-300">{calcAV(netRevenue)}%</td>
+                <td className="py-3 px-4 text-right font-mono text-slate-500 dark:text-slate-400">{formatCurrency(prevNetRevenue)}</td>
+                <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">{calcAH(netRevenue, prevNetRevenue)}</td>
               </tr>
 
               {/* 4. CUSTOS DIRETO / CMV / CSP */}
-              <tr className="text-slate-600 hover:bg-slate-50/80 transition-colors">
-                <td className="py-2.5 px-4 pl-8 text-slate-700">
+              <tr className="text-slate-600 dark:text-slate-400 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                <td className="py-2.5 px-4 pl-8 text-slate-700 dark:text-slate-300">
                   (-) Custos Diretos / Insumos / Serviços Prestados (CMV/CSP)
                 </td>
-                <td className="py-2.5 px-4 text-right font-mono text-rose-700 font-semibold">({formatCurrency(cogs)})</td>
-                <td className="py-2.5 px-3 text-right font-mono text-slate-500">{calcAV(cogs)}%</td>
-                <td className="py-2.5 px-4 text-right font-mono text-slate-400">({formatCurrency(prevCogs)})</td>
-                <td className="py-2.5 px-3 text-right font-mono text-slate-600">{calcAH(cogs, prevCogs)}</td>
+                <td className="py-2.5 px-4 text-right font-mono text-rose-700 dark:text-rose-400 font-semibold">({formatCurrency(cogs)})</td>
+                <td className="py-2.5 px-3 text-right font-mono text-slate-500 dark:text-slate-400">{calcAV(cogs)}%</td>
+                <td className="py-2.5 px-4 text-right font-mono text-slate-400 dark:text-slate-500">({formatCurrency(prevCogs)})</td>
+                <td className="py-2.5 px-3 text-right font-mono text-slate-600 dark:text-slate-400">{calcAH(cogs, prevCogs)}</td>
               </tr>
 
               {/* 5. LUCRO BRUTO OPERACIONAL */}
-              <tr className="font-bold text-sky-950 bg-sky-50/30">
+              <tr className="font-bold text-sky-950 dark:text-sky-200 bg-sky-50/30 dark:bg-sky-950/20">
                 <td className="py-3 px-4 pl-6">(=) LUCRO BRUTO OPERACIONAL</td>
-                <td className="py-3 px-4 text-right font-mono text-sky-900">{formatCurrency(grossProfit)}</td>
-                <td className="py-3 px-3 text-right font-mono text-sky-800">{calcAV(grossProfit)}%</td>
-                <td className="py-3 px-4 text-right font-mono text-slate-500">{formatCurrency(prevGrossProfit)}</td>
-                <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700">{calcAH(grossProfit, prevGrossProfit)}</td>
+                <td className="py-3 px-4 text-right font-mono text-sky-900 dark:text-cyan-300">{formatCurrency(grossProfit)}</td>
+                <td className="py-3 px-3 text-right font-mono text-sky-800 dark:text-cyan-400">{calcAV(grossProfit)}%</td>
+                <td className="py-3 px-4 text-right font-mono text-slate-500 dark:text-slate-400">{formatCurrency(prevGrossProfit)}</td>
+                <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">{calcAH(grossProfit, prevGrossProfit)}</td>
               </tr>
 
               {/* 6. DESPESAS OPERACIONAIS GERAIS */}
-              <tr className="text-slate-700 font-semibold bg-slate-50/40">
+              <tr className="text-slate-700 dark:text-slate-300 font-semibold bg-slate-50/40 dark:bg-slate-800/40">
                 <td className="py-2.5 px-4 pl-8">(-) DESPESAS OPERACIONAIS GERAIS (Fixas & Administrativas)</td>
-                <td className="py-2.5 px-4 text-right font-mono text-rose-700">({formatCurrency(operationalExpensesTotal)})</td>
-                <td className="py-2.5 px-3 text-right font-mono text-slate-500">{calcAV(operationalExpensesTotal)}%</td>
-                <td className="py-2.5 px-4 text-right font-mono text-slate-400">({formatCurrency(prevOperationalExpenses)})</td>
-                <td className="py-2.5 px-3 text-right font-mono text-slate-600">{calcAH(operationalExpensesTotal, prevOperationalExpenses)}</td>
+                <td className="py-2.5 px-4 text-right font-mono text-rose-700 dark:text-rose-400">({formatCurrency(operationalExpensesTotal)})</td>
+                <td className="py-2.5 px-3 text-right font-mono text-slate-500 dark:text-slate-400">{calcAV(operationalExpensesTotal)}%</td>
+                <td className="py-2.5 px-4 text-right font-mono text-slate-400 dark:text-slate-500">({formatCurrency(prevOperationalExpenses)})</td>
+                <td className="py-2.5 px-3 text-right font-mono text-slate-600 dark:text-slate-400">{calcAH(operationalExpensesTotal, prevOperationalExpenses)}</td>
               </tr>
 
               {/* Detalhamento de Despesas Operacionais por Categoria */}
               {operationalPayables.slice(0, 7).map(p => (
-                <tr key={p.id} className="text-[11px] text-slate-500 hover:bg-slate-50/50">
+                <tr key={p.id} className="text-[11px] text-slate-500 dark:text-slate-400 hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                   <td className="py-1.5 px-4 pl-12 truncate max-w-xs">
                     • {p.supplier || p.description} ({p.category || 'Geral'})
                   </td>
-                  <td className="py-1.5 px-4 text-right font-mono text-slate-600">({formatCurrency(p.amount)})</td>
+                  <td className="py-1.5 px-4 text-right font-mono text-slate-600 dark:text-slate-300">({formatCurrency(p.amount)})</td>
                   <td className="py-1.5 px-3 text-right font-mono text-slate-400">{calcAV(p.amount)}%</td>
                   <td className="py-1.5 px-4 text-right font-mono text-slate-400">-</td>
                   <td className="py-1.5 px-3 text-right font-mono text-slate-400">-</td>
@@ -1230,38 +1230,38 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
               ))}
 
               {/* 7. EBITDA */}
-              <tr className="font-extrabold text-cyan-950 bg-cyan-50/60 border-t-2 border-b-2 border-cyan-200">
+              <tr className="font-extrabold text-cyan-950 dark:text-cyan-200 bg-cyan-50/60 dark:bg-cyan-950/30 border-t-2 border-b-2 border-cyan-200 dark:border-cyan-800/60">
                 <td className="py-3.5 px-4 pl-6 flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-cyan-600" />
+                  <Zap className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                   <span>(=) EBITDA (Lucro Operacional Antes de Juros e Tributos)</span>
                 </td>
-                <td className="py-3.5 px-4 text-right font-mono text-base text-cyan-900">{formatCurrency(ebitda)}</td>
-                <td className="py-3.5 px-3 text-right font-mono text-cyan-800 font-black">{calcAV(ebitda)}%</td>
-                <td className="py-3.5 px-4 text-right font-mono text-slate-600">{formatCurrency(prevEbitda)}</td>
-                <td className="py-3.5 px-3 text-right font-mono font-bold text-emerald-700">{calcAH(ebitda, prevEbitda)}</td>
+                <td className="py-3.5 px-4 text-right font-mono text-base text-cyan-900 dark:text-cyan-300">{formatCurrency(ebitda)}</td>
+                <td className="py-3.5 px-3 text-right font-mono text-cyan-800 dark:text-cyan-400 font-black">{calcAV(ebitda)}%</td>
+                <td className="py-3.5 px-4 text-right font-mono text-slate-600 dark:text-slate-400">{formatCurrency(prevEbitda)}</td>
+                <td className="py-3.5 px-3 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">{calcAH(ebitda, prevEbitda)}</td>
               </tr>
 
               {/* 8. RESULTADO FINANCEIRO */}
-              <tr className="text-slate-600 hover:bg-slate-50/80 transition-colors">
-                <td className="py-2.5 px-4 pl-8 text-slate-700">
+              <tr className="text-slate-600 dark:text-slate-400 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                <td className="py-2.5 px-4 pl-8 text-slate-700 dark:text-slate-300">
                   (-) Despesas Financeiras & Tarifas Bancárias (C6 Bank)
                 </td>
-                <td className="py-2.5 px-4 text-right font-mono text-rose-700 font-semibold">({formatCurrency(financialExpenses)})</td>
-                <td className="py-2.5 px-3 text-right font-mono text-slate-500">{calcAV(financialExpenses)}%</td>
-                <td className="py-2.5 px-4 text-right font-mono text-slate-400">({formatCurrency(prevFinancialExpenses)})</td>
-                <td className="py-2.5 px-3 text-right font-mono text-slate-600">{calcAH(financialExpenses, prevFinancialExpenses)}</td>
+                <td className="py-2.5 px-4 text-right font-mono text-rose-700 dark:text-rose-400 font-semibold">({formatCurrency(financialExpenses)})</td>
+                <td className="py-2.5 px-3 text-right font-mono text-slate-500 dark:text-slate-400">{calcAV(financialExpenses)}%</td>
+                <td className="py-2.5 px-4 text-right font-mono text-slate-400 dark:text-slate-500">({formatCurrency(prevFinancialExpenses)})</td>
+                <td className="py-2.5 px-3 text-right font-mono text-slate-600 dark:text-slate-400">{calcAH(financialExpenses, prevFinancialExpenses)}</td>
               </tr>
 
               {/* 9. RESULTADO LÍQUIDO DO EXERCÍCIO */}
-              <tr className="font-black text-emerald-950 bg-emerald-50 border-t-2 border-emerald-300">
+              <tr className="font-black text-emerald-950 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 border-t-2 border-emerald-300 dark:border-emerald-700">
                 <td className="py-4 px-4 pl-6 text-sm flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span>(=) RESULTADO LÍQUIDO DO PERÍODO (LUCRO LÍQUIDO)</span>
                 </td>
-                <td className="py-4 px-4 text-right font-mono text-lg text-emerald-800">{formatCurrency(netIncome)}</td>
-                <td className="py-4 px-3 text-right font-mono text-emerald-700 text-sm">{calcAV(netIncome)}%</td>
-                <td className="py-4 px-4 text-right font-mono text-slate-600">{formatCurrency(prevNetIncome)}</td>
-                <td className="py-4 px-3 text-right font-mono font-black text-emerald-700 text-sm">{calcAH(netIncome, prevNetIncome)}</td>
+                <td className="py-4 px-4 text-right font-mono text-lg text-emerald-800 dark:text-emerald-300">{formatCurrency(netIncome)}</td>
+                <td className="py-4 px-3 text-right font-mono text-emerald-700 dark:text-emerald-400 text-sm">{calcAV(netIncome)}%</td>
+                <td className="py-4 px-4 text-right font-mono text-slate-600 dark:text-slate-400">{formatCurrency(prevNetIncome)}</td>
+                <td className="py-4 px-3 text-right font-mono font-black text-emerald-700 dark:text-emerald-400 text-sm">{calcAH(netIncome, prevNetIncome)}</td>
               </tr>
 
             </tbody>
@@ -1273,13 +1273,13 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Gráfico 1: Composição de Custos & Despesas por Categoria */}
-        <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div className="p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-base font-bold text-slate-900">Composição de Gastos</h3>
-              <PieIcon className="w-4 h-4 text-sky-600" />
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Composição de Gastos</h3>
+              <PieIcon className="w-4 h-4 text-sky-600 dark:text-cyan-400" />
             </div>
-            <p className="text-xs text-slate-500">Distribuição por Categoria Conta Azul no mês</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Distribuição por Categoria Conta Azul no mês</p>
 
             <div className="h-56 w-full mt-4">
               <ResponsiveContainer width="100%" height="100%">
@@ -1298,7 +1298,7 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', fontSize: '11px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '11px', color: '#f8fafc', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)' }}
                     formatter={(value) => [formatCurrency(value), '']}
                   />
                 </PieChart>
@@ -1310,15 +1310,15 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
                 <div key={item.name} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2 truncate">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: EXPENSE_COLORS[idx % EXPENSE_COLORS.length] }} />
-                    <span className="text-slate-700 truncate">{item.name}</span>
+                    <span className="text-slate-700 dark:text-slate-300 truncate">{item.name}</span>
                   </div>
-                  <span className="font-mono text-slate-600 font-bold">{formatCurrency(item.value)}</span>
+                  <span className="font-mono text-slate-600 dark:text-slate-400 font-bold">{formatCurrency(item.value)}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-100">
+          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
               onClick={handleCopySummary}
@@ -1331,21 +1331,21 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
         </div>
 
         {/* Gráfico 2: Evolução de Desempenho Histórico (6 Meses) */}
-        <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-2 p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-1">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Evolução Histórica de Resultados (6 Meses)</h3>
-                <p className="text-xs text-slate-500">Comparativo consolidado de Receitas vs Despesas e Lucro Líquido</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Evolução Histórica de Resultados (6 Meses)</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Comparativo consolidado de Receitas vs Despesas e Lucro Líquido</p>
               </div>
               <div className="flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1.5 text-sky-700 font-semibold">
+                <span className="flex items-center gap-1.5 text-sky-700 dark:text-cyan-400 font-semibold">
                   <span className="w-2.5 h-2.5 rounded-full bg-sky-600" /> Receitas
                 </span>
-                <span className="flex items-center gap-1.5 text-rose-700 font-semibold">
+                <span className="flex items-center gap-1.5 text-rose-700 dark:text-rose-400 font-semibold">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Despesas
                 </span>
-                <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
+                <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Resultado
                 </span>
               </div>
@@ -1354,11 +1354,11 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
             <div className="h-72 w-full mt-6">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={historicalTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `R$ ${val / 1000}k`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={10} tickFormatter={(val) => `R$ ${val / 1000}k`} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', fontSize: '11px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '11px', color: '#f8fafc', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)' }}
                     formatter={(value) => [formatCurrency(value), '']}
                   />
                   <Bar dataKey="receita" fill="#0077B6" radius={[6, 6, 0, 0]} name="Receita Bruta" />
@@ -1369,9 +1369,9 @@ _Gerado automaticamente via Portal Amici BPO Financeiro & Conta Azul API_`
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500">
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Período analisado: <strong>Abril/2026 a Setembro/2026</strong></span>
-            <span className="text-sky-700 font-bold">Amici BPO • Monitoramento Contínuo</span>
+            <span className="text-sky-700 dark:text-cyan-400 font-bold">Amici BPO • Monitoramento Contínuo</span>
           </div>
         </div>
 
