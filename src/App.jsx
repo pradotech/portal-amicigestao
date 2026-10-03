@@ -28,6 +28,7 @@ import {
   persistContaAzulSyncToSupabase,
   signOutSupabase,
   getSupabaseSession,
+  DEFAULT_CLIENTS,
   INITIAL_PAYABLES,
   INITIAL_RECEIVABLES
 } from './services/supabase'
@@ -43,14 +44,18 @@ import {
   refreshContaAzulAccessToken,
   checkAndAutoRenewToken
 } from './services/contaAzulService'
+import {
+  exchangeBlingCodeForToken,
+  getBlingConfig
+} from './services/blingService'
 import { RefreshCw } from 'lucide-react'
 
 export function App() {
   // Hook de controle de Tema Light / Dark (Padrão: Light)
   const { theme, toggleTheme } = useTheme()
 
-  // Lista de Empresas / Clientes cadastrados no Supabase
-  const [clients, setClients] = useState([])
+  // Lista de Empresas / Clientes cadastrados no Supabase (Drillex em Amici Gestão e Amici Comex)
+  const [clients, setClients] = useState(DEFAULT_CLIENTS)
 
   // Cliente selecionado atualmente
   const [selectedClient, setSelectedClient] = useState(null)
@@ -193,23 +198,49 @@ export function App() {
         const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'))
         
         const code = searchParams.get('code') || hashParams.get('code')
+        const state = searchParams.get('state') || hashParams.get('state') || ''
+        const error = searchParams.get('error') || hashParams.get('error')
+        const errorDesc = searchParams.get('error_description') || hashParams.get('error_description')
         const newAccessToken = searchParams.get('access_token') || hashParams.get('access_token')
         const newRefreshToken = searchParams.get('refresh_token') || hashParams.get('refresh_token')
         
-        if (code) {
-          setSyncToast('Processando código de autorização da Conta Azul...')
-          const res = await exchangeContaAzulCodeForToken(code)
-          if (res.success) {
-            setTokenVersion(v => v + 1)
-            setSyncToast('✓ Conta Azul conectada com sucesso! Atualizando dados...')
-            window.history.replaceState({}, document.title, window.location.pathname)
-            setTimeout(() => {
-              handleSyncApi()
-            }, 600)
+        if (error) {
+          console.warn('Retorno de erro OAuth:', error, errorDesc)
+          window.history.replaceState({}, document.title, window.location.pathname)
+          if (errorDesc?.includes('state')) {
+            setSyncToast('Aviso: O parâmetro state é obrigatório na URL do Bling. Use o link com &state=amici_brlumens_comex')
           } else {
-            console.error('Erro na troca de código por token:', res.error)
-            setSyncToast(`Aviso: ${res.error}`)
-            window.history.replaceState({}, document.title, window.location.pathname)
+            setSyncToast(`Aviso de autorização: ${errorDesc || error}`)
+          }
+          return
+        }
+        
+        if (code) {
+          const isBlingAuth = state.includes('bling') || state.includes('comex') || window.location.pathname.includes('bling')
+
+          if (isBlingAuth) {
+            setSyncToast('Processando código de autorização do Bling ERP (BR Lumens)...')
+            const res = await exchangeBlingCodeForToken(code)
+            if (res.success) {
+              setTokenVersion(v => v + 1)
+              setSyncToast('✓ Bling ERP da BR Lumens conectado com sucesso!')
+              window.history.replaceState({}, document.title, window.location.pathname)
+            }
+          } else {
+            setSyncToast('Processando código de autorização da Conta Azul...')
+            const res = await exchangeContaAzulCodeForToken(code)
+            if (res.success) {
+              setTokenVersion(v => v + 1)
+              setSyncToast('✓ Conta Azul conectada com sucesso! Atualizando dados...')
+              window.history.replaceState({}, document.title, window.location.pathname)
+              setTimeout(() => {
+                handleSyncApi()
+              }, 600)
+            } else {
+              console.error('Erro na troca de código por token:', res.error)
+              setSyncToast(`Aviso: ${res.error}`)
+              window.history.replaceState({}, document.title, window.location.pathname)
+            }
           }
         } else if (newAccessToken) {
           saveContaAzulGlobalConfig(

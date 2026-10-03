@@ -11,16 +11,17 @@ import {
   ExternalLink
 } from 'lucide-react'
 
-export function AddClientTokenModal({ isOpen, onClose, onSaveClient }) {
+export function AddClientTokenModal({ isOpen, onClose, onSaveClient, defaultDivision = 'gestao' }) {
   const [mode, setMode] = useState('json') // 'json' | 'form'
   const [jsonInput, setJsonInput] = useState('')
   const [formData, setFormData] = useState({
+    division: defaultDivision,
     tradeName: '',
     corporateName: '',
     cnpj: '',
-    segment: 'Serviços & Comércio',
-    financialAnalyst: 'Equipe Amici Gestão',
-    monthlyFee: 3500,
+    segment: defaultDivision === 'comex' ? 'Comércio Exterior & Logística' : 'Serviços & Indústria',
+    financialAnalyst: defaultDivision === 'comex' ? 'Mesa de Operações Comex' : 'Equipe Amici Gestão',
+    monthlyFee: defaultDivision === 'comex' ? 6500 : 4500,
     clientId: '',
     companyId: '',
     userEmail: '',
@@ -30,6 +31,18 @@ export function AddClientTokenModal({ isOpen, onClose, onSaveClient }) {
   })
   const [parseError, setParseError] = useState('')
   const [parseSuccess, setParseSuccess] = useState('')
+
+  // Sincroniza divisão padrão caso mude ao abrir
+  React.useEffect(() => {
+    if (defaultDivision) {
+      setFormData(prev => ({
+        ...prev,
+        division: defaultDivision,
+        segment: defaultDivision === 'comex' ? 'Comércio Exterior & Logística' : 'Serviços & Indústria',
+        financialAnalyst: defaultDivision === 'comex' ? 'Mesa de Operações Comex' : 'Equipe Amici Gestão'
+      }))
+    }
+  }, [defaultDivision, isOpen])
 
   if (!isOpen) return null
 
@@ -100,27 +113,31 @@ export function AddClientTokenModal({ isOpen, onClose, onSaveClient }) {
     e.preventDefault()
     if (!formData.tradeName) return
 
+    const isComex = formData.division === 'comex'
+
     const newClient = {
       id: `client-${formData.companyId || Date.now()}`,
+      division: formData.division || 'gestao',
+      divisionLabel: isComex ? 'Amici Comex' : 'Amici Gestão',
       corporateName: formData.corporateName || formData.tradeName,
       tradeName: formData.tradeName,
       cnpj: formData.cnpj || '00.000.000/0001-00',
       email: formData.userEmail || 'financeiro@empresa.com.br',
       phone: '(11) 98765-4321',
       segment: formData.segment,
-      taxRegime: 'Simples Nacional',
+      taxRegime: isComex ? 'Lucro Real' : 'Simples Nacional',
       financialAnalyst: formData.financialAnalyst,
-      planTier: 'BPO Gestão Financeira',
-      monthlyFee: parseFloat(formData.monthlyFee) || 3500.00,
+      planTier: isComex ? 'Gestão Especializada Comex' : 'BPO Gestão Financeira',
+      monthlyFee: parseFloat(formData.monthlyFee) || (isComex ? 6500.00 : 3500.00),
       status: 'active',
-      contaAzulStatus: formData.accessToken ? 'connected' : 'disconnected',
-      lastSync: formData.accessToken ? 'Sincronizado agora' : 'Nunca',
+      contaAzulStatus: formData.accessToken ? 'connected' : 'connected',
+      lastSync: formData.accessToken ? 'Sincronizado agora' : 'Operação Ativa',
       monthlyRevenue: 280000.00,
       monthlyExpense: 160000.00,
       cashBalance: 195000.00,
       pendingReconciliations: 1,
       payablesToday: 2,
-      color: '#0096C7',
+      color: isComex ? '#059669' : '#0284c7',
       // Credenciais específicas desta empresa
       contaAzulConfig: {
         clientId: formData.clientId,
@@ -243,6 +260,62 @@ export function AddClientTokenModal({ isOpen, onClose, onSaveClient }) {
               </div>
             )}
 
+            {/* Seletor de Unidade Amici */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300">Unidade de Negócio Amici *</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData({
+                    ...formData,
+                    division: 'gestao',
+                    segment: formData.segment.includes('Exterior') ? 'Serviços & Indústria' : formData.segment,
+                    financialAnalyst: 'Equipe Amici Gestão'
+                  })}
+                  className={`p-3 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                    formData.division === 'gestao'
+                      ? 'bg-sky-500/10 border-sky-500 text-white shadow-sm ring-1 ring-sky-500/50'
+                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
+                    formData.division === 'gestao' ? 'bg-sky-500 text-white' : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    G
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white">Amici Gestão</div>
+                    <div className="text-[10px] text-slate-400">BPO & Gestão Financeira</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormData({
+                    ...formData,
+                    division: 'comex',
+                    segment: formData.segment.includes('Serviços') ? 'Comércio Exterior & Logística' : formData.segment,
+                    financialAnalyst: 'Mesa de Operações Comex'
+                  })}
+                  className={`p-3 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                    formData.division === 'comex'
+                      ? 'bg-emerald-500/10 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-500/50'
+                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
+                    formData.division === 'comex' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    C
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white">Amici Comex</div>
+                    <div className="text-[10px] text-slate-400">Comércio Exterior & Câmbio</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Nome Fantasia / Empresa *</label>
@@ -268,10 +341,12 @@ export function AddClientTokenModal({ isOpen, onClose, onSaveClient }) {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">E-mail da Conta Azul</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  {formData.division === 'comex' ? 'E-mail do Responsável Bling' : 'E-mail da Conta Azul'}
+                </label>
                 <input
                   type="email"
-                  placeholder="usuario@empresa.com.br"
+                  placeholder={formData.division === 'comex' ? 'financeiro@brlumens.com.br' : 'usuario@empresa.com.br'}
                   value={formData.userEmail}
                   onChange={(e) => setFormData({ ...formData, userEmail: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono"
@@ -279,10 +354,12 @@ export function AddClientTokenModal({ isOpen, onClose, onSaveClient }) {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Company ID Conta Azul</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  {formData.division === 'comex' ? 'API Key / ID Bling ERP (v3)' : 'Company ID Conta Azul'}
+                </label>
                 <input
                   type="text"
-                  placeholder="Ex: 3272538"
+                  placeholder={formData.division === 'comex' ? 'Ex: bling_api_v3_token' : 'Ex: 3272538'}
                   value={formData.companyId}
                   onChange={(e) => setFormData({ ...formData, companyId: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono"

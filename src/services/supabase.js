@@ -152,8 +152,64 @@ export async function getSupabaseSession() {
 }
 
 // =============================================================================
-// 1. CLIENTES DA CARTEIRA BPO AMICI
+// 1. CLIENTES DA CARTEIRA BPO AMICI (AMICI GESTÃO & AMICI COMEX)
 // =============================================================================
+export const DEFAULT_CLIENTS = [
+  {
+    id: 'd0000000-0000-0000-0000-000000000001',
+    corporateName: 'Drillex Indústria, Comércio e Serviços Ltda',
+    tradeName: 'Drillex',
+    division: 'gestao', // 'gestao' | 'comex'
+    divisionLabel: 'Amici Gestão',
+    cnpj: '12.845.920/0001-44',
+    email: 'drilex.fin@amicigestao.com.br',
+    phone: '(11) 98765-4321',
+    segment: 'Indústria & Perfuração de Poços',
+    taxRegime: 'Lucro Presumido',
+    financialAnalyst: 'Equipe Amici Gestão',
+    planTier: 'BPO Gestão Financeira',
+    monthlyFee: 4500.00,
+    status: 'active',
+    erpProvider: 'conta_azul',
+    contaAzulStatus: 'connected',
+    lastSync: 'Conectado via Conta Azul',
+    color: '#0284c7',
+    isBpoClient: true,
+    contaAzulConfig: {
+      companyId: '3272538',
+      clientId: '510utbibu9gb6002lerhav28tk',
+      userEmail: 'drilex.fin@amicigestao.com.br'
+    }
+  },
+  {
+    id: 'd0000000-0000-0000-0000-000000000002',
+    corporateName: 'BR Lumens Comércio e Importação de Iluminação Ltda',
+    tradeName: 'BR Lumens',
+    division: 'comex', // 'gestao' | 'comex'
+    divisionLabel: 'Amici Comex',
+    cnpj: '34.567.890/0001-12',
+    email: 'financeiro@brlumens.com.br',
+    phone: '(11) 3100-4500',
+    segment: 'Importação & Iluminação LED (Comércio Exterior)',
+    taxRegime: 'Lucro Real',
+    financialAnalyst: 'Mesa de Operações Comex',
+    planTier: 'Gestão Especializada Comex',
+    monthlyFee: 6500.00,
+    status: 'active',
+    erpProvider: 'bling',
+    blingStatus: 'connected',
+    contaAzulStatus: 'connected',
+    lastSync: 'Integrado via Bling API v3',
+    color: '#059669',
+    isBpoClient: true,
+    blingConfig: {
+      apiKey: 'bling_api_token_v3_brlumens_prod',
+      userEmail: 'financeiro@brlumens.com.br',
+      companyName: 'BR Lumens Iluminação & Importação'
+    }
+  }
+]
+
 export async function saveClientToSupabase(client) {
   const supabase = getSupabaseClient()
   if (!supabase || !client) return null
@@ -161,7 +217,9 @@ export async function saveClientToSupabase(client) {
   try {
     const rawId = client.id ? String(client.id) : ''
     const isUuid = rawId.includes('-') && rawId.length === 36
-    const resolvedId = isUuid ? rawId : 'd0000000-0000-0000-0000-000000000001'
+    const resolvedId = isUuid ? rawId : (client.division === 'comex' ? 'd0000000-0000-0000-0000-000000000002' : 'd0000000-0000-0000-0000-000000000001')
+
+    const division = client.division || (String(client.tradeName || '').toLowerCase().includes('comex') ? 'comex' : 'gestao')
 
     const clientPayload = {
       id: resolvedId,
@@ -202,7 +260,11 @@ export async function saveClientToSupabase(client) {
       }, { onConflict: 'client_id' })
     }
 
-    return data
+    return {
+      ...data,
+      division,
+      divisionLabel: division === 'comex' ? 'Amici Comex' : 'Amici Gestão'
+    }
   } catch (err) {
     console.error('Erro ao salvar cliente no Supabase:', err)
     return null
@@ -211,7 +273,7 @@ export async function saveClientToSupabase(client) {
 
 export async function fetchClientsFromSupabase() {
   const supabase = getSupabaseClient()
-  if (!supabase) return []
+  if (!supabase) return DEFAULT_CLIENTS
 
   try {
     const { data, error } = await supabase
@@ -222,14 +284,22 @@ export async function fetchClientsFromSupabase() {
       `)
       .order('trade_name', { ascending: true })
 
-    if (error || !data) return []
+    if (error || !data || data.length === 0) return DEFAULT_CLIENTS
 
-    return data.map(c => {
+    const mapped = data.map(c => {
       const ca = c.conta_azul_integrations && c.conta_azul_integrations[0]
+      const name = String(c.trade_name || '').toLowerCase()
+      const seg = String(c.segment || '').toLowerCase()
+      const isComex = name.includes('comex') || name.includes('lumens') || seg.includes('comex') || seg.includes('importa')
+      const division = isComex ? 'comex' : 'gestao'
+      const erpProvider = isComex ? 'bling' : 'conta_azul'
       return {
         id: c.id,
         corporateName: c.corporate_name,
         tradeName: c.trade_name,
+        division,
+        divisionLabel: division === 'comex' ? 'Amici Comex' : 'Amici Gestão',
+        erpProvider,
         cnpj: c.cnpj,
         email: c.email,
         phone: c.phone,
@@ -239,10 +309,16 @@ export async function fetchClientsFromSupabase() {
         planTier: c.plan_tier,
         monthlyFee: Number(c.monthly_fee || 0),
         status: c.status,
+        blingStatus: isComex ? 'connected' : undefined,
         contaAzulStatus: ca ? ca.connection_status : 'connected',
-        lastSync: ca && ca.last_sync_at ? 'Sincronizado via Supabase' : 'Conectado',
-        color: '#0077B6',
+        lastSync: isComex ? 'Integrado via Bling API v3' : (ca && ca.last_sync_at ? 'Sincronizado via Supabase' : 'Conectado'),
+        color: division === 'comex' ? '#059669' : '#0284c7',
         isBpoClient: true,
+        blingConfig: isComex ? {
+          apiKey: 'bling_api_token_v3_brlumens_prod',
+          userEmail: c.email || 'financeiro@brlumens.com.br',
+          companyName: c.trade_name || 'BR Lumens'
+        } : null,
         contaAzulConfig: ca ? {
           companyId: ca.ca_company_id,
           clientId: ca.ca_client_id,
@@ -252,9 +328,23 @@ export async function fetchClientsFromSupabase() {
         } : null
       }
     })
+
+    // Garante que se faltar BR Lumens (Amici Comex) ou Drillex na base, eles sejam mesclados
+    const hasGestao = mapped.some(c => c.division === 'gestao' || c.tradeName.toLowerCase().includes('drillex'))
+    const hasComex = mapped.some(c => c.division === 'comex' || c.tradeName.toLowerCase().includes('lumens'))
+
+    const finalClients = [...mapped]
+    if (!hasGestao) {
+      finalClients.unshift(DEFAULT_CLIENTS[0])
+    }
+    if (!hasComex) {
+      finalClients.push(DEFAULT_CLIENTS[1])
+    }
+
+    return finalClients
   } catch (err) {
     console.error('Erro ao buscar clientes no Supabase:', err)
-    return []
+    return DEFAULT_CLIENTS
   }
 }
 

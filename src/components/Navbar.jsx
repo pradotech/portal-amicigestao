@@ -84,18 +84,32 @@ export function Navbar({
               <AmiciLogo className="h-7 sm:h-9 md:h-10" variant={theme} />
             </div>
             
-            {/* Tag da Empresa Ativa */}
-            {selectedClient && (
-              <div className={`hidden xl:flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-semibold shadow-inner ${
-                isLight
-                  ? 'bg-sky-50 border-sky-200 text-sky-900'
-                  : 'bg-slate-900 border-cyan-500/30 text-cyan-300'
-              }`}>
-                <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-                <span className={`font-normal ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Empresa:</span>
-                <span className="font-bold truncate max-w-[120px]">{selectedClient.tradeName}</span>
-              </div>
-            )}
+            {/* Tag da Empresa Ativa com Unidade e ERP */}
+            {selectedClient && (() => {
+              const isComex = selectedClient.division === 'comex' || selectedClient.tradeName?.toLowerCase().includes('lumens') || selectedClient.tradeName?.toLowerCase().includes('comex')
+              return (
+                <div className={`hidden lg:flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-semibold shadow-inner ${
+                  isComex
+                    ? (isLight ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-slate-900 border-emerald-500/30 text-emerald-300')
+                    : (isLight ? 'bg-sky-50 border-sky-200 text-sky-900' : 'bg-slate-900 border-cyan-500/30 text-cyan-300')
+                }`}>
+                  <span className={`w-2 h-2 rounded-full animate-pulse ${
+                    isComex ? 'bg-emerald-500' : 'bg-cyan-500'
+                  }`} />
+                  <span className={`font-normal ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {isComex ? 'Amici Comex:' : 'Amici Gestão:'}
+                  </span>
+                  <span className="font-bold truncate max-w-[140px]">{selectedClient.tradeName}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                    isComex
+                      ? (isLight ? 'bg-emerald-200/60 text-emerald-900' : 'bg-emerald-950 text-emerald-300')
+                      : (isLight ? 'bg-sky-200/60 text-sky-900' : 'bg-sky-950 text-sky-300')
+                  }`}>
+                    {isComex ? 'Bling ERP' : 'Conta Azul'}
+                  </span>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Lado Direito: Ações Rápidas do Topo */}
