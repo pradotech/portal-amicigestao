@@ -273,6 +273,8 @@ async function fetchBlingApi(endpoint, apiKey, options = {}) {
   }
 
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const primaryUrl = `/api-bling${cleanEndpoint}`
+
   try {
     let res = await fetch(primaryUrl, {
       ...options,
