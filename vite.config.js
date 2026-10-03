@@ -33,6 +33,18 @@ export default defineConfig({
             delete proxyRes.headers['WWW-Authenticate']
           })
         }
+      },
+      '/api-bling': {
+        target: 'https://www.bling.com.br/Api/v3',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api-bling/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            delete proxyRes.headers['www-authenticate']
+            delete proxyRes.headers['WWW-Authenticate']
+          })
+        }
       }
     }
   }

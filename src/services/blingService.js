@@ -363,76 +363,111 @@ export const BLING_INITIAL_RECEIVABLES = [
 ]
 
 /**
- * Busca Contas a Pagar diretamente da API v3 do Bling (OpenAPI v3 Oficial)
+ * Helper de requisição resiliente com Proxy anti-CORS (/api-bling) e fallback
+ */
+async function fetchBlingApi(endpoint, apiKey, options = {}) {
+  const config = getBlingConfig()
+  const token = apiKey || config.accessToken || config.apiKey
+  if (!token) return { ok: false, data: [] }
+
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Accept': 'application/json',
+    ...(options.headers || {})
+  }
+
+  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+
+  const urls = [
+    `/api-bling${cleanEndpoint}`,
+    `https://www.bling.com.br/Api/v3${cleanEndpoint}`
+  ]
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        ...options,
+        headers
+      })
+
+      if (res.ok) {
+        const json = await res.json()
+        return { ok: true, data: json.data || json || [] }
+      }
+    } catch (err) {
+      // Tenta a próxima URL
+    }
+  }
+
+  return { ok: false, data: [] }
+}
+
+/**
+ * Busca Contas a Pagar diretamente da API v3 do Bling com paginação automática
  */
 export async function fetchBlingContasPagar(apiKey) {
+  const allPayables = []
+  let page = 1
+  const maxPages = 10
+
   try {
-    const config = getBlingConfig()
-    const token = apiKey || config.accessToken || config.apiKey
-    if (!token) return []
-
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json'
-    }
-
-    const endpoints = [
-      'https://www.bling.com.br/Api/v3/contas/pagar?limite=100',
-      'https://www.bling.com.br/Api/v3/contas-pagar?limite=100'
-    ]
-
-    for (const ep of endpoints) {
-      try {
-        const res = await fetch(ep, { headers })
-        if (res.ok) {
-          const json = await res.json()
-          if (json.data && Array.isArray(json.data)) return json.data
+    while (page <= maxPages) {
+      const res = await fetchBlingApi(`/contas/pagar?pagina=${page}&limite=100`, apiKey)
+      if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+        allPayables.push(...res.data)
+        if (res.data.length < 100) break
+        page++
+      } else {
+        if (page === 1) {
+          const fallbackRes = await fetchBlingApi(`/contas-pagar?pagina=1&limite=100`, apiKey)
+          if (fallbackRes.ok && Array.isArray(fallbackRes.data)) {
+            allPayables.push(...fallbackRes.data)
+          }
         }
-      } catch (e) {
-        console.warn('Tentando próximo endpoint do Bling...', e.message)
+        break
       }
     }
-    return []
+
+    console.log(`[Bling API] Contas a Pagar recuperadas: ${allPayables.length} títulos.`)
+    return allPayables
   } catch (err) {
     console.warn('Aviso ao consultar contas a pagar no Bling:', err)
-    return []
+    return allPayables
   }
 }
 
 /**
- * Busca Contas a Receber diretamente da API v3 do Bling (OpenAPI v3 Oficial)
+ * Busca Contas a Receber diretamente da API v3 do Bling com paginação automática
  */
 export async function fetchBlingContasReceber(apiKey) {
+  const allReceivables = []
+  let page = 1
+  const maxPages = 10
+
   try {
-    const config = getBlingConfig()
-    const token = apiKey || config.accessToken || config.apiKey
-    if (!token) return []
-
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json'
-    }
-
-    const endpoints = [
-      'https://www.bling.com.br/Api/v3/contas/receber?limite=100',
-      'https://www.bling.com.br/Api/v3/contas-receber?limite=100'
-    ]
-
-    for (const ep of endpoints) {
-      try {
-        const res = await fetch(ep, { headers })
-        if (res.ok) {
-          const json = await res.json()
-          if (json.data && Array.isArray(json.data)) return json.data
+    while (page <= maxPages) {
+      const res = await fetchBlingApi(`/contas/receber?pagina=${page}&limite=100`, apiKey)
+      if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+        allReceivables.push(...res.data)
+        if (res.data.length < 100) break
+        page++
+      } else {
+        if (page === 1) {
+          const fallbackRes = await fetchBlingApi(`/contas-receber?pagina=1&limite=100`, apiKey)
+          if (fallbackRes.ok && Array.isArray(fallbackRes.data)) {
+            allReceivables.push(...fallbackRes.data)
+          }
         }
-      } catch (e) {
-        console.warn('Tentando próximo endpoint do Bling...', e.message)
+        break
       }
     }
-    return []
+
+    console.log(`[Bling API] Contas a Receber recuperadas: ${allReceivables.length} títulos.`)
+    return allReceivables
   } catch (err) {
     console.warn('Aviso ao consultar contas a receber no Bling:', err)
-    return []
+    return allReceivables
   }
 }
 
@@ -441,20 +476,9 @@ export async function fetchBlingContasReceber(apiKey) {
  */
 export async function fetchBlingContatos(apiKey) {
   try {
-    const config = getBlingConfig()
-    const token = apiKey || config.accessToken || config.apiKey
-    if (!token) return []
-
-    const res = await fetch('https://www.bling.com.br/Api/v3/contatos?limite=100', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      }
-    })
-
-    if (!res.ok) return []
-    const json = await res.json()
-    return json.data || []
+    const res = await fetchBlingApi('/contatos?limite=100', apiKey)
+    if (res.ok && Array.isArray(res.data)) return res.data
+    return []
   } catch (err) {
     console.warn('Aviso ao consultar contatos no Bling:', err)
     return []
@@ -466,20 +490,9 @@ export async function fetchBlingContatos(apiKey) {
  */
 export async function fetchBlingPedidosVendas(apiKey) {
   try {
-    const config = getBlingConfig()
-    const token = apiKey || config.accessToken || config.apiKey
-    if (!token) return []
-
-    const res = await fetch('https://www.bling.com.br/Api/v3/pedidos/vendas?limite=100', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      }
-    })
-
-    if (!res.ok) return []
-    const json = await res.json()
-    return json.data || []
+    const res = await fetchBlingApi('/pedidos/vendas?limite=100', apiKey)
+    if (res.ok && Array.isArray(res.data)) return res.data
+    return []
   } catch (err) {
     console.warn('Aviso ao consultar pedidos de venda no Bling:', err)
     return []
@@ -492,6 +505,7 @@ export async function fetchBlingPedidosVendas(apiKey) {
 export async function syncRealBlingData(targetClient, onProgress = () => {}) {
   const clientTradeName = targetClient?.tradeName || 'BR Lumens'
   const clientId = targetClient?.id || 'd0000000-0000-0000-0000-000000000002'
+  const todayStr = new Date().toISOString().split('T')[0]
 
   onProgress({ step: 'init', message: `Conectando à API v3 do Bling ERP de ${clientTradeName}...`, progress: 15 })
   await new Promise(r => setTimeout(r, 200))
@@ -513,37 +527,87 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
 
   onProgress({ step: 'mapping', message: `Processando fluxo financeiro e câmbio da BR Lumens...`, progress: 95 })
 
-  const mappedPayables = livePayables.length > 0
-    ? livePayables.map((p, idx) => ({
-        id: `bling-pay-${p.id || idx}`,
-        clientId: clientId,
-        description: p.historico || p.descricao || `Pagamento Bling #${p.id}`,
-        supplier: p.contato?.nome || 'Fornecedor Bling',
-        dueDate: p.vencimento || new Date().toISOString().split('T')[0],
-        amount: Number(p.valor || 0),
-        status: p.situacao === 2 ? 'paid' : (p.situacao === 3 ? 'partial' : 'scheduled'),
-        category: p.categoria?.descricao || 'Custo de Importação / Operacional',
-        bankAccount: p.portador?.descricao || 'Itaú Comex Câmbio',
-        erpProvider: 'Bling ERP v3',
-        documentNumber: String(p.numeroDocumento || p.id || '')
-      }))
+  // Filtra títulos cancelados (situacao === 4 ou situacao === 'cancelado') para não distorcer totais
+  const validLivePayables = livePayables.filter(p => p.situacao !== 4 && p.situacao !== 'cancelado')
+  const validLiveReceivables = liveReceivables.filter(r => r.situacao !== 4 && r.situacao !== 'cancelado')
+
+  const mappedPayables = validLivePayables.length > 0
+    ? validLivePayables.map((p, idx) => {
+        const rawAmount = Number(p.valor || 0)
+        const rawSaldo = p.saldo !== undefined && p.saldo !== null ? Number(p.saldo) : (p.situacao === 2 ? 0 : rawAmount)
+        const isPaid = p.situacao === 2 || (rawAmount > 0 && rawSaldo === 0)
+        const isPartial = p.situacao === 3 || (!isPaid && rawSaldo > 0 && rawSaldo < rawAmount)
+        const paidAmount = isPaid ? rawAmount : (isPartial ? Math.max(0, rawAmount - rawSaldo) : 0)
+        const dueDate = p.vencimento || p.dataVencimento || todayStr
+
+        let status = 'scheduled'
+        if (isPaid) {
+          status = 'paid'
+        } else if (isPartial) {
+          status = 'partial'
+        } else if (dueDate < todayStr) {
+          status = 'overdue'
+        } else if (dueDate === todayStr) {
+          status = 'today'
+        }
+
+        return {
+          id: `bling-pay-${p.id || idx}`,
+          clientId: clientId,
+          description: p.historico || p.descricao || `Pagamento Bling #${p.id || idx + 1}`,
+          supplier: p.contato?.nome || p.fornecedor?.nome || 'Fornecedor Bling',
+          dueDate: dueDate,
+          amount: rawAmount,
+          amountPaid: paidAmount,
+          amountRemaining: isPaid ? 0 : rawSaldo,
+          status: status,
+          category: p.categoria?.descricao || p.categoria?.nome || 'Importação & Fornecedores',
+          bankAccount: p.portador?.nome || p.portador?.descricao || 'Itaú Comex Câmbio',
+          erpProvider: 'Bling ERP v3',
+          documentNumber: String(p.numeroDocumento || p.id || ''),
+          barcode: p.codigoBarras || p.linhaDigitavel || null
+        }
+      })
     : BLING_INITIAL_PAYABLES.map(p => ({ ...p, clientId }))
 
-  const mappedReceivables = liveReceivables.length > 0
-    ? liveReceivables.map((r, idx) => ({
-        id: `bling-rec-${r.id || idx}`,
-        clientId: clientId,
-        customer: r.contato?.nome || 'Cliente BR Lumens',
-        customerName: r.contato?.nome || 'Cliente BR Lumens',
-        description: r.historico || r.descricao || `Recebimento Bling #${r.id}`,
-        dueDate: r.vencimento || new Date().toISOString().split('T')[0],
-        amount: Number(r.valor || 0),
-        status: r.situacao === 2 ? 'paid' : 'pending',
-        category: r.categoria?.descricao || 'Receita de Vendas (Comex)',
-        bankAccount: r.portador?.descricao || 'Itaú PJ',
-        erpProvider: 'Bling ERP v3',
-        documentNumber: String(r.numeroDocumento || r.id || '')
-      }))
+  const mappedReceivables = validLiveReceivables.length > 0
+    ? validLiveReceivables.map((r, idx) => {
+        const rawAmount = Number(r.valor || 0)
+        const rawSaldo = r.saldo !== undefined && r.saldo !== null ? Number(r.saldo) : (r.situacao === 2 ? 0 : rawAmount)
+        const isReceived = r.situacao === 2 || (rawAmount > 0 && rawSaldo === 0)
+        const isPartial = r.situacao === 3 || (!isReceived && rawSaldo > 0 && rawSaldo < rawAmount)
+        const receivedAmount = isReceived ? rawAmount : (isPartial ? Math.max(0, rawAmount - rawSaldo) : 0)
+        const dueDate = r.vencimento || r.dataVencimento || todayStr
+
+        let status = 'pending'
+        if (isReceived) {
+          status = 'received'
+        } else if (isPartial) {
+          status = 'partial'
+        } else if (dueDate < todayStr) {
+          status = 'overdue'
+        } else if (dueDate === todayStr) {
+          status = 'today'
+        }
+
+        return {
+          id: `bling-rec-${r.id || idx}`,
+          clientId: clientId,
+          customer: r.contato?.nome || r.cliente?.nome || 'Cliente BR Lumens',
+          customerName: r.contato?.nome || r.cliente?.nome || 'Cliente BR Lumens',
+          description: r.historico || r.descricao || `Recebimento Bling #${r.id || idx + 1}`,
+          dueDate: dueDate,
+          amount: rawAmount,
+          amountPaid: receivedAmount,
+          amountRemaining: isReceived ? 0 : rawSaldo,
+          status: status,
+          category: r.categoria?.descricao || r.categoria?.nome || 'Venda de Iluminação LED (Comex)',
+          bankAccount: r.portador?.nome || r.portador?.descricao || 'Itaú PJ',
+          erpProvider: 'Bling ERP v3',
+          documentNumber: String(r.numeroDocumento || r.id || ''),
+          paymentMethod: r.formaPagamento?.descricao || 'Boleto / PIX'
+        }
+      })
     : BLING_INITIAL_RECEIVABLES.map(r => ({ ...r, clientId }))
 
   onProgress({ step: 'done', message: `✓ Dados da BR Lumens sincronizados com sucesso via Bling API v3!`, progress: 100 })
@@ -553,7 +617,7 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
     payables: mappedPayables,
     receivables: mappedReceivables,
     transactions: [],
-    counterparties: [],
+    counterparties: liveContatos,
     categories: [],
     syncSummary: {
       client: clientTradeName,

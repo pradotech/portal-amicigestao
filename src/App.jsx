@@ -29,6 +29,7 @@ import {
   updateReceivableStatusInSupabase,
   reconcileTransactionInSupabase,
   persistContaAzulSyncToSupabase,
+  persistBlingSyncToSupabase,
   signOutSupabase,
   getSupabaseSession,
   DEFAULT_CLIENTS,
@@ -431,22 +432,43 @@ export function App() {
     const providerName = isBling ? 'Bling ERP v3' : 'Conta Azul'
 
     try {
+      const targetId = targetClient?.id || (isBling ? 'd0000000-0000-0000-0000-000000000002' : 'd0000000-0000-0000-0000-000000000001')
+
       if (isBling) {
         const syncResult = await syncRealBlingData(targetClient, (prog) => {
           setSyncProgress(prog)
         })
 
         if (syncResult && syncResult.success) {
-          setPayables(syncResult.payables)
-          setReceivables(syncResult.receivables)
-          setSyncToast(`✓ Dados da BR Lumens sincronizados com a API Bling ERP (${syncResult.payables.length} a pagar, ${syncResult.receivables.length} a receber)!`)
+          // Persiste as entidades cadastrais e conexão no banco Supabase
+          await saveClientToSupabase(targetClient)
+          await persistBlingSyncToSupabase(targetId, syncResult)
+
+          // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase de forma incondicional
+          const [supaPayables, supaReceivables, supaTx, supaPessoas] = await Promise.all([
+            fetchPayablesFromSupabase(targetId),
+            fetchReceivablesFromSupabase(targetId),
+            fetchBankTransactionsFromSupabase(targetId),
+            fetchCounterpartiesFromSupabase(targetId)
+          ])
+
+          setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : BLING_INITIAL_PAYABLES)
+          setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : BLING_INITIAL_RECEIVABLES)
+          setTransactions(supaTx || [])
+          setRawPessoas(supaPessoas || [])
+
+          const countPay = supaPayables && supaPayables.length > 0 ? supaPayables.length : syncResult.payables.length
+          const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : syncResult.receivables.length
+          setSyncToast(`✓ Dados da BR Lumens sincronizados e gravados no banco Supabase (${countPay} a pagar, ${countRec} a receber)!`)
+        } else {
+          // Se a API falhou/expirou, recarrega os dados intactos do Supabase
+          await loadDataFromSupabase(targetId)
+          setSyncToast('Sessão Bling expirada ou indisponível. Exibindo dados salvos no banco Supabase!')
         }
       } else {
         const syncResult = await syncRealContaAzulData(targetClient, (prog) => {
           setSyncProgress(prog)
         })
-
-        const targetId = targetClient?.id || 'd0000000-0000-0000-0000-000000000001'
 
         if (syncResult && syncResult.success) {
           // Puxa lista atualizada de contatos/fornecedores/clientes da Conta Azul para o Supabase

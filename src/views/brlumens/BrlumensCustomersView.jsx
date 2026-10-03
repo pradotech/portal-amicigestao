@@ -51,17 +51,15 @@ export function BrlumensCustomersView({
     customEndDate,
     setCustomEndDate,
     activePreset,
-    setPreset,
+    periodLabel,
+    handleApplyPreset,
     handlePrevMonth,
     handleNextMonth,
-    getPeriodLabel,
-    filterDataByPeriod
+    filterByDate
   } = dateFilter
 
-  const periodLabel = getPeriodLabel()
-
   // Filtra lançamentos do Bling pelo período selecionado no DateFilterBar
-  const dateFilteredReceivables = filterDataByPeriod(receivables, 'dueDate')
+  const dateFilteredReceivables = filterByDate(receivables, 'dueDate')
 
   const filteredReceivables = dateFilteredReceivables.filter(receivable => {
     const desc = receivable.description || ''
@@ -193,7 +191,7 @@ export function BrlumensCustomersView({
           setCustomStartDate(start)
           setCustomEndDate(end)
         }}
-        onPresetChange={setPreset}
+        onPresetChange={handleApplyPreset}
         onPrevMonth={handlePrevMonth}
         onNextMonth={handleNextMonth}
       />

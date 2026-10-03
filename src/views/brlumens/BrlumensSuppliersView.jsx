@@ -60,17 +60,15 @@ export function BrlumensSuppliersView({
     customEndDate,
     setCustomEndDate,
     activePreset,
-    setPreset,
+    periodLabel,
+    handleApplyPreset,
     handlePrevMonth,
     handleNextMonth,
-    getPeriodLabel,
-    filterDataByPeriod
+    filterByDate
   } = dateFilter
 
-  const periodLabel = getPeriodLabel()
-
   // Filtra lançamentos a pagar do Bling pelo período selecionado no DateFilterBar
-  const dateFilteredPayables = filterDataByPeriod(payables, 'dueDate')
+  const dateFilteredPayables = filterByDate(payables, 'dueDate')
 
   // Aplica filtros adicionais de busca e status sobre os dados filtrados por data
   const filteredPayables = dateFilteredPayables.filter(payable => {
@@ -240,7 +238,7 @@ export function BrlumensSuppliersView({
           setCustomStartDate(start)
           setCustomEndDate(end)
         }}
-        onPresetChange={setPreset}
+        onPresetChange={handleApplyPreset}
         onPrevMonth={handlePrevMonth}
         onNextMonth={handleNextMonth}
       />

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { BLING_INITIAL_PAYABLES, BLING_INITIAL_RECEIVABLES } from './blingService'
 
 // Chaves padrão ou obtidas via localStorage / variáveis de ambiente
 const storedUrl = localStorage.getItem('amici_supabase_url') || import.meta.env.VITE_SUPABASE_URL || ''
@@ -565,13 +566,16 @@ export async function fetchPayablesFromSupabase(clientId) {
       .eq('client_id', resolvedClientId)
       .order('due_date', { ascending: true })
 
-    const sepCount = data ? data.filter(p => p.due_date && p.due_date.startsWith('2026-09')).length : 0
+    const isBlingClient = resolvedClientId === 'd0000000-0000-0000-0000-000000000002'
+    const defaultList = isBlingClient ? BLING_INITIAL_PAYABLES : INITIAL_PAYABLES
 
-    if (error || !data || data.length === 0 || sepCount === 0) {
-      // Auto-recuperação: se a tabela de pagamentos estiver vazia ou sem títulos do mês atual, popula os lançamentos oficiais
+    const hasData = data && data.length > 0
+
+    if (error || !data || data.length === 0) {
+      // Auto-recuperação: se a tabela de pagamentos estiver vazia, popula os lançamentos oficiais
       try {
         await supabase.from('payables').delete().eq('client_id', resolvedClientId)
-        const seedPayload = INITIAL_PAYABLES.map(p => ({
+        const seedPayload = defaultList.map(p => ({
           client_id: resolvedClientId,
           ca_payable_id: p.id,
           supplier_name: p.supplier,
@@ -581,14 +585,14 @@ export async function fetchPayablesFromSupabase(clientId) {
           paid_amount: p.amountPaid || 0,
           due_date: p.dueDate,
           status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
-          barcode: p.barcode || null,
-          notes: 'Lançamento oficial BPO Amici Conta Azul'
+          barcode: p.barcode || p.barCode || null,
+          notes: isBlingClient ? 'Lançamento oficial BR Lumens via Bling ERP v3' : 'Lançamento oficial BPO Amici Conta Azul'
         }))
         await supabase.from('payables').insert(seedPayload)
       } catch (seedErr) {
-        console.warn('Aviso ao auto-recuperar INITIAL_PAYABLES:', seedErr)
+        console.warn('Aviso ao auto-recuperar payables:', seedErr)
       }
-      return INITIAL_PAYABLES
+      return defaultList
     }
 
     return data.map(p => {
@@ -878,17 +882,20 @@ export async function fetchReceivablesFromSupabase(clientId) {
       .eq('client_id', resolvedClientId)
       .order('due_date', { ascending: true })
 
-    // Auto-recuperação: se a tabela de recebíveis estiver vazia, sem recebidos do mês atual ou com anomalia de fallback
-    const todayStr = new Date().toISOString().split('T')[0]
-    const hasCorruptedTodayCount = data && data.filter(r => r.due_date === todayStr).length > 20
-    const sepReceivedTotal = data ? data
-      .filter(r => r.due_date && r.due_date.startsWith('2026-09') && (r.status === 'received' || Number(r.received_amount) > 0))
-      .reduce((acc, r) => acc + Number(r.received_amount || r.amount || 0), 0) : 0
+    const isBlingClient = resolvedClientId === 'd0000000-0000-0000-0000-000000000002'
+    const defaultList = isBlingClient ? BLING_INITIAL_RECEIVABLES : INITIAL_RECEIVABLES
 
-    if (error || !data || data.length === 0 || hasCorruptedTodayCount || sepReceivedTotal < 50000) {
+    // Auto-recuperação: se a tabela de recebíveis estiver vazia para o cliente
+    const todayStr = new Date().toISOString().split('T')[0]
+    const hasCorruptedTodayCount = !isBlingClient && data && data.filter(r => r.due_date === todayStr).length > 20
+    const sepReceivedTotal = !isBlingClient && data ? data
+      .filter(r => r.due_date && r.due_date.startsWith('2026-09') && (r.status === 'received' || Number(r.received_amount) > 0))
+      .reduce((acc, r) => acc + Number(r.received_amount || r.amount || 0), 0) : (isBlingClient ? 100000 : 0)
+
+    if (error || !data || data.length === 0 || hasCorruptedTodayCount || (!isBlingClient && sepReceivedTotal < 50000)) {
       try {
         await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
-        const seedPayload = INITIAL_RECEIVABLES.map(r => ({
+        const seedPayload = defaultList.map(r => ({
           client_id: resolvedClientId,
           ca_receivable_id: r.id,
           customer_name: r.customer,
@@ -903,9 +910,9 @@ export async function fetchReceivablesFromSupabase(clientId) {
         }))
         await supabase.from('receivables').insert(seedPayload)
       } catch (seedErr) {
-        console.warn('Aviso ao auto-recuperar INITIAL_RECEIVABLES:', seedErr)
+        console.warn('Aviso ao auto-recuperar receivables:', seedErr)
       }
-      return INITIAL_RECEIVABLES
+      return defaultList
     }
 
     return data.map(r => {
@@ -943,7 +950,7 @@ export async function fetchReceivablesFromSupabase(clientId) {
     })
   } catch (err) {
     console.error('Erro ao buscar receivables no Supabase:', err)
-    return INITIAL_RECEIVABLES
+    return isBlingClient ? BLING_INITIAL_RECEIVABLES : INITIAL_RECEIVABLES
   }
 }
 
@@ -1286,4 +1293,113 @@ export async function updateContaAzulIntegrationToken(clientId, accessToken, ref
     return false
   }
 }
+
+/**
+ * Persiste os dados sincronizados do Bling ERP v3 (BR Lumens) no banco de dados Supabase
+ */
+export async function persistBlingSyncToSupabase(clientId, syncData) {
+  const supabase = getSupabaseClient()
+  if (!supabase || !clientId) return false
+
+  try {
+    const rawId = String(clientId)
+    const isUuid = rawId.includes('-') && rawId.length === 36
+    const resolvedClientId = isUuid ? rawId : 'd0000000-0000-0000-0000-000000000002'
+
+    // a) Salvar Contatos/Fornecedores/Clientes do Bling
+    if (syncData.rawContatos && syncData.rawContatos.length > 0) {
+      try {
+        const counterpartiesPayload = syncData.rawContatos.map(c => ({
+          client_id: resolvedClientId,
+          ca_person_id: String(c.id || Math.random()),
+          name: c.nome || 'Contato Bling',
+          document: c.numeroDocumento || null,
+          person_type: c.tipo === 'J' ? 'LEGAL' : 'NATURAL',
+          email: c.email || null,
+          phone: c.celular || c.telefone || null,
+          is_active: true
+        }))
+        await supabase.from('counterparties').upsert(counterpartiesPayload, { onConflict: 'client_id, ca_person_id' })
+      } catch (err) {
+        console.warn('Aviso ao persistir contatos do Bling no Supabase:', err)
+      }
+    }
+
+    // b) Salvar Contas a Pagar do Bling no Supabase
+    if (syncData.payables && syncData.payables.length > 0) {
+      try {
+        const payablesPayload = syncData.payables.map(p => ({
+          client_id: resolvedClientId,
+          ca_payable_id: String(p.id),
+          supplier_name: p.supplier || 'Fornecedor Bling',
+          category_name: p.category || 'Importação & Frete',
+          description: p.description || `Pagamento - ${p.supplier || 'Bling'}`,
+          amount: Number(p.amount || 0),
+          paid_amount: Number(p.amountPaid || 0),
+          due_date: p.dueDate,
+          status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
+          barcode: p.barcode || p.barCode || null,
+          notes: 'Sincronizado via Bling ERP v3'
+        }))
+
+        // Limpeza atômica dos registros anteriores da BR Lumens
+        await supabase.from('payables').delete().eq('client_id', resolvedClientId)
+        const { error: insPayErr } = await supabase.from('payables').insert(payablesPayload)
+        if (insPayErr) {
+          console.warn('Aviso ao inserir payables do Bling no Supabase:', insPayErr.message)
+        }
+      } catch (err) {
+        console.warn('Erro ao salvar payables do Bling:', err)
+      }
+    }
+
+    // c) Salvar Contas a Receber do Bling no Supabase
+    if (syncData.receivables && syncData.receivables.length > 0) {
+      try {
+        const receivablesPayload = syncData.receivables.map(r => ({
+          client_id: resolvedClientId,
+          ca_receivable_id: String(r.id),
+          customer_name: r.customer || 'Cliente Bling',
+          category_name: r.category || 'Venda de Iluminação LED',
+          description: r.description || `Recebimento - ${r.customer || 'Bling'}`,
+          amount: Number(r.amount || 0),
+          received_amount: Number(r.amountPaid || 0),
+          due_date: r.dueDate,
+          status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
+          payment_method: r.paymentMethod || 'boleto',
+          invoice_number: r.invoiceNumber || null
+        }))
+
+        // Limpeza atômica dos registros anteriores da BR Lumens
+        await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
+        const { error: insRecErr } = await supabase.from('receivables').insert(receivablesPayload)
+        if (insRecErr) {
+          console.warn('Aviso ao inserir receivables do Bling no Supabase:', insRecErr.message)
+        }
+      } catch (err) {
+        console.warn('Erro ao salvar receivables do Bling:', err)
+      }
+    }
+
+    // d) Registrar Log de Sincronização
+    try {
+      await supabase.from('sync_logs').insert({
+        client_id: resolvedClientId,
+        entity_type: 'bling_v3_sync',
+        status: 'success',
+        records_processed: (syncData.payables ? syncData.payables.length : 0) + (syncData.receivables ? syncData.receivables.length : 0),
+        details: `Sincronização BR Lumens via Bling ERP v3 executada e persistida no Supabase com sucesso.`,
+        executed_by: 'Amici Comex Portal'
+      })
+    } catch (err) {
+      console.warn('Aviso ao registrar sync_logs do Bling:', err)
+    }
+
+    return true
+  } catch (err) {
+    console.error('Erro ao persistir dados do Bling no Supabase:', err)
+    return false
+  }
+}
+
 

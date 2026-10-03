@@ -9,7 +9,11 @@
       "destination": "https://api.contaazul.com/:path*"
     },
     {
-      "source": "/((?!api-contaazul|api-ca-v1).*)",
+      "source": "/api-bling/:path*",
+      "destination": "https://www.bling.com.br/Api/v3/:path*"
+    },
+    {
+      "source": "/((?!api-contaazul|api-ca-v1|api-bling).*)",
       "destination": "/index.html"
     }
   ]
