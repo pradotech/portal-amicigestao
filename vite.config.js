@@ -35,7 +35,7 @@ export default defineConfig({
         }
       },
       '/api-bling': {
-        target: 'https://www.bling.com.br/Api/v3',
+        target: 'https://api.bling.com.br/v3',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api-bling/, ''),

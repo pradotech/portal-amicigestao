@@ -148,7 +148,7 @@ export function App() {
     }
   }
 
-  // Monitoramento e Renovação Automática Proativa em Segundo Plano (Auto-Refresh)
+  // Monitoramento e Renovação Automática Proativa em Segundo Plano (Auto-Refresh 100% Automático)
   useEffect(() => {
     let isChecking = false
 
@@ -169,7 +169,6 @@ export function App() {
               const res = await refreshBlingAccessToken(selectedClient)
               if (res.success) {
                 setTokenVersion(v => v + 1)
-                setSyncToast('✓ Sessão do Bling ERP renovada automaticamente em segundo plano!')
               } else {
                 failedRefreshTokensRef.current.add(`bling_${refreshToken}`)
               }
@@ -183,22 +182,19 @@ export function App() {
 
           if (refreshToken && !failedRefreshTokensRef.current.has(refreshToken)) {
             const expInfo = getTokenExpirationInfo(token)
-            // Se expirado ou faltar 5 min ou menos, renova preventivamente em background
             if (expInfo.isExpired || (expInfo.remainingMinutes !== null && expInfo.remainingMinutes <= 5)) {
-              console.log('🔄 Executando renovação automática de token em background...')
+              console.log('🔄 Executando renovação automática de token da Conta Azul em background...')
               const res = await refreshContaAzulAccessToken(selectedClient)
               if (res.success) {
                 setTokenVersion(v => v + 1)
-                setSyncToast('✓ Sessão Conta Azul renovada automaticamente em segundo plano!')
               } else {
-                // Marca este refresh_token como falho para não repetir em loop
                 failedRefreshTokensRef.current.add(refreshToken)
               }
             }
           }
         }
       } catch (err) {
-        console.warn('Erro na checagem de auto-refresh:', err)
+        console.warn('Aviso na checagem de auto-refresh:', err)
       } finally {
         isChecking = false
       }
@@ -210,7 +206,7 @@ export function App() {
     // Checagem periódica a cada 30 segundos
     const interval = setInterval(runAutoRefreshCheck, 30000)
 
-    // Checar ao voltar para a aba
+    // Checar ao voltar para a aba ou focar
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         runAutoRefreshCheck()
@@ -219,7 +215,6 @@ export function App() {
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('focus', runAutoRefreshCheck)
 
-    // Ouvir eventos disparados globalmente
     const handleTokenRefreshed = () => {
       setTokenVersion(v => v + 1)
     }

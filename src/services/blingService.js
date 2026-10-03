@@ -128,7 +128,7 @@ export async function refreshBlingAccessToken(targetClient) {
   const basicAuth = btoa(`${clientId}:${clientSecret}`)
 
   try {
-    const response = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
+    const response = await fetch('/api-bling/oauth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -202,7 +202,7 @@ export async function checkAndAutoRenewBlingToken(targetClient) {
 export async function exchangeBlingCodeForToken(code, clientIdKey = 'br-lumens') {
   try {
     const basicAuth = btoa(`${BLING_CLIENT_ID}:${BLING_CLIENT_SECRET}`)
-    const response = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
+    const response = await fetch('/api-bling/oauth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -273,17 +273,15 @@ async function fetchBlingApi(endpoint, apiKey, options = {}) {
   }
 
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
-  const primaryUrl = `/api-bling${cleanEndpoint}`
-
   try {
     let res = await fetch(primaryUrl, {
       ...options,
       headers
     })
 
-    // Se retornar 401 (token expirado), tenta auto-refresh com o Refresh Token
+    // Se receber 401 (token expirado ou não autorizado), renova automaticamente via Refresh Token e repete
     if (!res.ok && res.status === 401) {
-      console.log('🔄 Bling ERP: Token expirou (401). Tentando auto-refresh com Refresh Token...')
+      console.log('🔄 Bling ERP: Token expirado (401). Executando auto-renovação transparente via OAuth2 Refresh Token...')
       const refreshed = await refreshBlingAccessToken()
       if (refreshed && refreshed.success && refreshed.accessToken) {
         token = refreshed.accessToken

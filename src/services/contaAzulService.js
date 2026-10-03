@@ -126,11 +126,11 @@ async function fetchContaAzulApi(endpoint, tokenOverride, options = {}) {
       headers: { ...headers, ...(options.headers || {}) }
     })
 
-    // Se retornar 401 (token expirado), tenta renovar automaticamente em segundo plano e repete a chamada
+    // Se receber 401 (token expirado), renova automaticamente via Refresh Token e repete
     if (!res.ok && res.status === 401) {
-      console.log('🔄 Token expirou (401). Renovando automaticamente via Refresh Token...')
+      console.log('🔄 Conta Azul: Token expirado (401). Executando auto-renovação transparente via OAuth2 Refresh Token...')
       const refreshed = await refreshContaAzulAccessToken()
-      if (refreshed.success && refreshed.accessToken) {
+      if (refreshed && refreshed.success && refreshed.accessToken) {
         headers = getContaAzulAuthHeaders(refreshed.accessToken)
         res = await fetch(primaryUrl, {
           ...options,
