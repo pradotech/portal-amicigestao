@@ -256,6 +256,7 @@ export async function exchangeBlingCodeForToken(code, clientIdKey = 'br-lumens')
 
 export const BLING_INITIAL_PAYABLES = []
 export const BLING_INITIAL_RECEIVABLES = []
+export const BLING_INITIAL_COUNTERPARTIES = []
 
 /**
  * Helper de requisição resiliente com Proxy anti-CORS (/api-bling) e fallback
@@ -501,20 +502,25 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
     }
   })
 
+  // Retorna estritamente os dados reais retornados pela API v3 do Bling
+  const finalPayables = mappedPayables
+  const finalReceivables = mappedReceivables
+  const finalContatos = liveContatos
+
   onProgress({ step: 'done', message: `✓ Dados da BR Lumens sincronizados com sucesso via Bling API v3!`, progress: 100 })
 
   return {
     success: true,
-    payables: mappedPayables,
-    receivables: mappedReceivables,
+    payables: finalPayables,
+    receivables: finalReceivables,
     transactions: [],
-    counterparties: liveContatos,
+    counterparties: finalContatos,
     categories: [],
     syncSummary: {
       client: clientTradeName,
       provider: 'Bling ERP v3',
-      payablesCount: mappedPayables.length,
-      receivablesCount: mappedReceivables.length,
+      payablesCount: finalPayables.length,
+      receivablesCount: finalReceivables.length,
       syncedAt: new Date().toISOString()
     }
   }

@@ -353,207 +353,13 @@ export async function fetchClientsFromSupabase() {
 // 2. CONTAS A PAGAR (PAYABLES)
 // =============================================================================
 
-export const INITIAL_PAYABLES = [
-  // ================= SETEMBRO 2026 (MÊS ATUAL CONTA AZUL OFICIAL - DRILEX AUTOMACAO) =================
-  // 1. Pagos / Liquidados (R$ 79.884,32)
-  {
-    id: 'pay-sep-01',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'MICROMECANICA IND. COM. IMP. LTDA',
-    category: 'Materiais para Revenda',
-    description: '2/2 - Compra de produto 140 (NFe 72028-1)',
-    amount: 874.84,
-    amountPaid: 874.84,
-    amountRemaining: 0,
-    dueDate: '2026-09-01',
-    paymentDate: '2026-09-02',
-    status: 'paid',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '34191.00000 00000.100000 00000.000000 1 98450000874840'
-  },
-  {
-    id: 'pay-sep-02',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'Gustavo Martins Miranda',
-    category: 'Vale-Transporte',
-    description: 'Ajuda de Custo Combustível Operacional',
-    amount: 450.00,
-    amountPaid: 450.00,
-    amountRemaining: 0,
-    dueDate: '2026-09-01',
-    paymentDate: '2026-09-01',
-    status: 'paid',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '07790.00000 00000.200000 00000.000000 2 98450000450000'
-  },
-  {
-    id: 'pay-sep-03',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'Restaurante & Lanches Fábrica',
-    category: 'Lanches e Refeições',
-    description: 'Alimentação Operacional Turno Noturno',
-    amount: 92.40,
-    amountPaid: 92.40,
-    amountRemaining: 0,
-    dueDate: '2026-09-01',
-    paymentDate: '2026-09-01',
-    status: 'paid',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '34191.00000 00000.300000 00000.000000 3 98450000092400'
-  },
-  {
-    id: 'pay-sep-04',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'RODOALTO TRANSPORTES RODOVIARIOS',
-    category: 'Logística & Fretes',
-    description: 'Frete Carreta Equipamentos Industriais',
-    amount: 24500.00,
-    amountPaid: 24500.00,
-    amountRemaining: 0,
-    dueDate: '2026-09-04',
-    paymentDate: '2026-09-04',
-    status: 'paid',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '34191.00000 00000.400000 00000.000000 4 98450002450000'
-  },
-  {
-    id: 'pay-sep-05',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'AIRLINK TELECOMUNICACOES & FIBRA',
-    category: 'Infraestrutura & Telefonia',
-    description: 'Link Dedicado Fibra Óptica 1Gbps',
-    amount: 8900.00,
-    amountPaid: 8900.00,
-    amountRemaining: 0,
-    dueDate: '2026-09-08',
-    paymentDate: '2026-09-08',
-    status: 'paid',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '07790.00000 00000.500000 00000.000000 5 98450000890000'
-  },
-  {
-    id: 'pay-sep-06',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'AIGNEP DO BRASIL PRODUTOS PNEUMATICOS',
-    category: 'Insumos & Matéria Prima',
-    description: 'Válvulas e Conexões Pneumáticas de Alta Pressão',
-    amount: 31400.00,
-    amountPaid: 31400.00,
-    amountRemaining: 0,
-    dueDate: '2026-09-12',
-    paymentDate: '2026-09-12',
-    status: 'paid',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '34191.00000 00000.600000 00000.000000 6 98450003140000'
-  },
-  {
-    id: 'pay-sep-07',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'Auto Posto & Distribuidora Combustíveis',
-    category: 'Combustíveis e Lubrificantes',
-    description: 'Óleo Diesel S10 Sondas Operacionais',
-    amount: 13667.08,
-    amountPaid: 13667.08,
-    amountRemaining: 0,
-    dueDate: '2026-09-15',
-    paymentDate: '2026-09-15',
-    status: 'paid',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '34191.00000 00000.700000 00000.000000 7 98450001366708'
-  },
-  // 2. Vencidos (R$ 25.790,98)
-  {
-    id: 'pay-sep-08',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'Gerdau Aços e Perfis SA',
-    category: 'Insumos & Matéria Prima',
-    description: 'Tubos de Aço Liga Especial e Hastes',
-    amount: 18320.00,
-    amountPaid: 0,
-    amountRemaining: 18320.00,
-    dueDate: '2026-09-18',
-    status: 'overdue',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '34191.88410 90123.491024 10294.500018 7 98440001832000'
-  },
-  {
-    id: 'pay-sep-09',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'Dental Cremer / Segurança do Trabalho',
-    category: 'EPI & Saúde Ocupacional',
-    description: 'EPIs e Equipamentos de Proteção Individual',
-    amount: 4210.80,
-    amountPaid: 0,
-    amountRemaining: 4210.80,
-    dueDate: '2026-09-21',
-    status: 'overdue',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '34191.10920 44021.902194 88120.940002 9 98450000421080'
-  },
-  {
-    id: 'pay-sep-10',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'Enel Distribuição São Paulo',
-    category: 'Energia Elétrica & Utilidades',
-    description: 'Conta de Energia Pavilhão Industrial',
-    amount: 3260.18,
-    amountPaid: 0,
-    amountRemaining: 3260.18,
-    dueDate: '2026-09-23',
-    status: 'overdue',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '83610000032 1 10800072026 8 09230000000 1 00000000000 0'
-  },
-  // 3. Vencem Hoje (R$ 322,00)
-  {
-    id: 'pay-sep-11',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'Cartório de Registro e Títulos',
-    category: 'Despesas Legais e Cartorárias',
-    description: 'Emolumentos e Certidões Contratuais',
-    amount: 322.00,
-    amountPaid: 0,
-    amountRemaining: 322.00,
-    dueDate: '2026-09-26',
-    status: 'today',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '23793.38128 60083.001923 88000.643209 1 98460000032200'
-  },
-  // ================= HISTÓRICO OUTROS MESES =================
-  {
-    id: 'pay-aug-01',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'Gerdau Aços e Perfis SA',
-    category: 'Insumos & Matéria Prima',
-    description: 'Tubos de Aço Liga Especial',
-    amount: 35000.00,
-    amountPaid: 35000.00,
-    amountRemaining: 0,
-    dueDate: '2026-08-15',
-    paymentDate: '2026-08-15',
-    status: 'paid',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '34191.88410 90123.491024 10294.500018 7 98440003500000'
-  },
-  {
-    id: 'pay-oct-01',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    supplier: 'Receita Federal do Brasil',
-    category: 'Impostos & Tributos',
-    description: 'DARF IRPJ / CSLL Quota Mensal Drillex',
-    amount: 22618.60,
-    amountPaid: 0,
-    amountRemaining: 22618.60,
-    dueDate: '2026-10-10',
-    status: 'scheduled',
-    bankAccount: 'Banco C6 PJ',
-    barcode: '85890000226 0 00000179260 9 24090000000 3 00000000000 0'
-  }
-]
+export const INITIAL_PAYABLES = []
 
 export async function fetchPayablesFromSupabase(clientId) {
   const supabase = getSupabaseClient()
-  if (!supabase) return INITIAL_PAYABLES
+  if (!supabase) return []
+
+  const todayStr = new Date().toISOString().split('T')[0]
 
   try {
     const rawId = clientId ? String(clientId) : ''
@@ -566,40 +372,11 @@ export async function fetchPayablesFromSupabase(clientId) {
       .eq('client_id', resolvedClientId)
       .order('due_date', { ascending: true })
 
-    const isBlingClient = resolvedClientId === 'd0000000-0000-0000-0000-000000000002'
-
-    if (isBlingClient) {
-      if (error || !data || data.length === 0) {
-        return []
-      }
-    } else {
-      if (error || !data || data.length === 0) {
-        // Auto-recuperação: se a tabela de pagamentos estiver vazia para a Drillex, popula os lançamentos oficiais
-        try {
-          await supabase.from('payables').delete().eq('client_id', resolvedClientId)
-          const seedPayload = INITIAL_PAYABLES.map(p => ({
-            client_id: resolvedClientId,
-            ca_payable_id: p.id,
-            supplier_name: p.supplier,
-            category_name: p.category,
-            description: p.description,
-            amount: p.amount,
-            paid_amount: p.amountPaid || 0,
-            due_date: p.dueDate,
-            status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
-            barcode: p.barcode || p.barCode || null,
-            notes: 'Lançamento oficial BPO Amici Conta Azul'
-          }))
-          await supabase.from('payables').insert(seedPayload)
-        } catch (seedErr) {
-          console.warn('Aviso ao auto-recuperar payables Drillex:', seedErr)
-        }
-        return INITIAL_PAYABLES
-      }
+    if (error || !data || data.length === 0) {
+      return []
     }
 
     return data.map(p => {
-      const todayStr = new Date().toISOString().split('T')[0]
       const rawAmount = Number(p.amount || 0)
       const paidAmount = Number(p.paid_amount || p.amount_paid || (p.status === 'paid' ? rawAmount : 0))
       const isFullyPaid = p.status === 'paid' || (rawAmount > 0 && paidAmount >= rawAmount)
@@ -636,7 +413,7 @@ export async function fetchPayablesFromSupabase(clientId) {
     })
   } catch (err) {
     console.error('Erro ao buscar payables no Supabase:', err)
-    return INITIAL_PAYABLES
+    return []
   }
 }
 
@@ -705,174 +482,13 @@ export async function addPayableToSupabase(payable) {
   }
 }
 
-export const INITIAL_RECEIVABLES = [
-  // ================= SETEMBRO 2026 (MÊS ATUAL CONTA AZUL OFICIAL) =================
-  // 1. Recebidos (R$ 81.482,33)
-  {
-    id: 'rec-sep-01',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'PETROBRAS DISTRIBUIDORA SA',
-    category: 'Venda de Produtos & Serviços',
-    description: 'Venda #1570 - Fornecimento de Equipamentos de Perfuração',
-    amount: 38500.00,
-    amountPaid: 38500.00,
-    amountRemaining: 0,
-    dueDate: '2026-09-05',
-    status: 'received',
-    invoiceNumber: 'NF-e #1570',
-    paymentMethod: 'Boleto Bancário'
-  },
-  {
-    id: 'rec-sep-02',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'VALE S.A. MINERAÇÃO',
-    category: 'Prestação de Serviços Especializados',
-    description: 'Venda #1574 - Serviço de Sondagem e Perfilagem de Poços',
-    amount: 24282.33,
-    amountPaid: 24282.33,
-    amountRemaining: 0,
-    dueDate: '2026-09-10',
-    status: 'received',
-    invoiceNumber: 'NF-e #1574',
-    paymentMethod: 'Boleto Bancário'
-  },
-  {
-    id: 'rec-sep-03',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'USINAS SIDERURGICAS DE MINAS GERAIS',
-    category: 'Venda de Produtos & Serviços',
-    description: 'Venda #1578 - Fornecimento de Brocas Diamantadas',
-    amount: 18700.00,
-    amountPaid: 18700.00,
-    amountRemaining: 0,
-    dueDate: '2026-09-15',
-    status: 'received',
-    invoiceNumber: 'NF-e #1578',
-    paymentMethod: 'Boleto Bancário'
-  },
-  // 2. Vencidos (R$ 35.816,96)
-  {
-    id: 'rec-sep-04',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'COMPANHIA SIDERURGICA NACIONAL CSN',
-    category: 'Venda de Produtos & Serviços',
-    description: 'Venda #1562 - Locação de Perfuratriz Hidráulica',
-    amount: 22416.96,
-    amountPaid: 0,
-    amountRemaining: 22416.96,
-    dueDate: '2026-09-18',
-    status: 'overdue',
-    invoiceNumber: 'NF-e #1562',
-    paymentMethod: 'Boleto Bancário'
-  },
-  {
-    id: 'rec-sep-05',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'ANGLO AMERICAN MINÉRIO DE FERRO',
-    category: 'Manutenção de Equipamentos',
-    description: 'Venda #1565 - Revisão Geral Preventiva de Sondas',
-    amount: 13400.00,
-    amountPaid: 0,
-    amountRemaining: 13400.00,
-    dueDate: '2026-09-22',
-    status: 'overdue',
-    invoiceNumber: 'NF-e #1565',
-    paymentMethod: 'Boleto Bancário'
-  },
-  // 3. A Vencer (R$ 8.780,23)
-  {
-    id: 'rec-sep-06',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'KLABIN S.A. PAPEL E CELULOSE',
-    category: 'Venda de Produtos & Serviços',
-    description: 'Venda #1583 - Peças de Reposição e Hastes de Extensão',
-    amount: 5480.23,
-    amountPaid: 0,
-    amountRemaining: 5480.23,
-    dueDate: '2026-09-28',
-    status: 'pending',
-    invoiceNumber: 'NF-e #1583',
-    paymentMethod: 'Boleto Bancário'
-  },
-  {
-    id: 'rec-sep-07',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'SUZANO PAPEL E CELULOSE SA',
-    category: 'Prestação de Serviços Especializados',
-    description: 'Venda #1588 - Acompanhamento Técnico em Campo',
-    amount: 3300.00,
-    amountPaid: 0,
-    amountRemaining: 3300.00,
-    dueDate: '2026-09-30',
-    status: 'pending',
-    invoiceNumber: 'NF-e #1588',
-    paymentMethod: 'Boleto Bancário'
-  },
-  // ================= HISTÓRICO OUTROS MESES =================
-  {
-    id: 'rec-aug-01',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'PETROBRAS DISTRIBUIDORA SA',
-    category: 'Venda de Produtos & Serviços',
-    description: 'Venda #1540 - Brocas Especiais de Perfuração',
-    amount: 42000.00,
-    amountPaid: 42000.00,
-    amountRemaining: 0,
-    dueDate: '2026-08-10',
-    status: 'received',
-    invoiceNumber: 'NF-e #1540',
-    paymentMethod: 'Boleto Bancário'
-  },
-  {
-    id: 'rec-aug-02',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'VALE S.A. MINERAÇÃO',
-    category: 'Prestação de Serviços Especializados',
-    description: 'Venda #1545 - Sondagem Geológica Poço 03',
-    amount: 35500.00,
-    amountPaid: 35500.00,
-    amountRemaining: 0,
-    dueDate: '2026-08-20',
-    status: 'received',
-    invoiceNumber: 'NF-e #1545',
-    paymentMethod: 'Boleto Bancário'
-  },
-  {
-    id: 'rec-oct-01',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'GERDAU AÇOS LONGOS S.A.',
-    category: 'Venda de Produtos & Serviços',
-    description: 'Venda #1595 - Locação de Equipamentos Pesados',
-    amount: 28000.00,
-    amountPaid: 0,
-    amountRemaining: 28000.00,
-    dueDate: '2026-10-05',
-    status: 'pending',
-    invoiceNumber: 'NF-e #1595',
-    paymentMethod: 'Boleto Bancário'
-  },
-  {
-    id: 'rec-oct-02',
-    clientId: 'd0000000-0000-0000-0000-000000000001',
-    customer: 'COMPANHIA SIDERURGICA NACIONAL CSN',
-    category: 'Venda de Produtos & Serviços',
-    description: 'Venda #1598 - Manutenção Preventiva Perfuratriz',
-    amount: 19500.00,
-    amountPaid: 0,
-    amountRemaining: 19500.00,
-    dueDate: '2026-10-15',
-    status: 'pending',
-    invoiceNumber: 'NF-e #1598',
-    paymentMethod: 'Boleto Bancário'
-  }
-]
+export const INITIAL_RECEIVABLES = []
 
-// =============================================================================
-// 3. CONTAS A RECEBER (RECEIVABLES)
-// =============================================================================
 export async function fetchReceivablesFromSupabase(clientId) {
   const supabase = getSupabaseClient()
-  if (!supabase) return INITIAL_RECEIVABLES
+  if (!supabase) return []
+
+  const todayStr = new Date().toISOString().split('T')[0]
 
   try {
     const rawId = clientId ? String(clientId) : ''
@@ -885,42 +501,8 @@ export async function fetchReceivablesFromSupabase(clientId) {
       .eq('client_id', resolvedClientId)
       .order('due_date', { ascending: true })
 
-    const isBlingClient = resolvedClientId === 'd0000000-0000-0000-0000-000000000002'
-
-    if (isBlingClient) {
-      if (error || !data || data.length === 0) {
-        return []
-      }
-    } else {
-      // Auto-recuperação Drillex
-      const todayStr = new Date().toISOString().split('T')[0]
-      const hasCorruptedTodayCount = data && data.filter(r => r.due_date === todayStr).length > 20
-      const sepReceivedTotal = data ? data
-        .filter(r => r.due_date && r.due_date.startsWith('2026-09') && (r.status === 'received' || Number(r.received_amount) > 0))
-        .reduce((acc, r) => acc + Number(r.received_amount || r.amount || 0), 0) : 0
-
-      if (error || !data || data.length === 0 || hasCorruptedTodayCount || sepReceivedTotal < 50000) {
-        try {
-          await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
-          const seedPayload = INITIAL_RECEIVABLES.map(r => ({
-            client_id: resolvedClientId,
-            ca_receivable_id: r.id,
-            customer_name: r.customer,
-            category_name: r.category,
-            description: r.description,
-            amount: r.amount,
-            received_amount: r.amountPaid || 0,
-            due_date: r.dueDate,
-            status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
-            payment_method: r.paymentMethod || 'boleto',
-            invoice_number: r.invoiceNumber || null
-          }))
-          await supabase.from('receivables').insert(seedPayload)
-        } catch (seedErr) {
-          console.warn('Aviso ao auto-recuperar INITIAL_RECEIVABLES Drillex:', seedErr)
-        }
-        return INITIAL_RECEIVABLES
-      }
+    if (error || !data || data.length === 0) {
+      return []
     }
 
     return data.map(r => {
@@ -958,7 +540,7 @@ export async function fetchReceivablesFromSupabase(clientId) {
     })
   } catch (err) {
     console.error('Erro ao buscar receivables no Supabase:', err)
-    return isBlingClient ? BLING_INITIAL_RECEIVABLES : INITIAL_RECEIVABLES
+    return []
   }
 }
 
@@ -1178,58 +760,45 @@ export async function persistContaAzulSyncToSupabase(clientId, syncData) {
 
     // d) Salvar Contas a Receber Reais da Conta Azul com Limpeza Prévia e Persistência Auditada
     try {
-      const receivablesPayload = INITIAL_RECEIVABLES.map((r, idx) => ({
-        client_id: resolvedClientId,
-        ca_receivable_id: r.id,
-        customer_name: r.customer || 'Cliente Conta Azul',
-        category_name: r.category || 'Venda de Produtos & Serviços',
-        description: r.description || `Recebimento - ${r.customer || 'Cliente'}`,
-        amount: Number(r.amount || 0),
-        received_amount: Number(r.amountPaid || 0),
-        due_date: r.dueDate,
-        status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
-        payment_method: r.paymentMethod || 'boleto',
-        invoice_number: r.invoiceNumber || null
-      }))
+      const realReceivables = syncData.mappedReceivables || syncData.receivables || []
+      if (realReceivables.length > 0) {
+        const receivablesPayload = realReceivables.map((r, idx) => ({
+          client_id: resolvedClientId,
+          ca_receivable_id: String(r.id || idx),
+          customer_name: r.customer || r.customerName || 'Cliente Conta Azul',
+          category_name: r.category || 'Venda de Produtos & Serviços',
+          description: r.description || ('Recebimento - ' + (r.customer || 'Cliente')),
+          amount: Number(r.amount || 0),
+          received_amount: Number(r.amountPaid || 0),
+          due_date: r.dueDate,
+          status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
+          payment_method: r.paymentMethod || 'boleto',
+          invoice_number: r.invoiceNumber || null
+        }))
+        await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
+        await supabase.from('receivables').insert(receivablesPayload)
+      }
 
-      // Limpeza atômica dos registros antigos deste cliente para evitar duplicidades
-      await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
-
-      // Inserção no Supabase
-      const { error: insertRecErr } = await supabase.from('receivables').insert(receivablesPayload)
-      if (insertRecErr) {
-        console.warn('Aviso ao persistir receivables no Supabase:', insertRecErr.message)
+      const realPayables = syncData.mappedPayables || syncData.payables || []
+      if (realPayables.length > 0) {
+        const payablesPayload = realPayables.map((p, idx) => ({
+          client_id: resolvedClientId,
+          ca_payable_id: String(p.id || idx),
+          supplier_name: p.supplier || 'Fornecedor',
+          category_name: p.category || 'Fornecedores & Insumos',
+          description: p.description || ('Pagamento - ' + (p.supplier || 'Fornecedor')),
+          amount: Number(p.amount || 0),
+          paid_amount: Number(p.amountPaid || 0),
+          due_date: p.dueDate,
+          status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
+          barcode: p.barcode || null,
+          notes: 'Sincronizado via Conta Azul'
+        }))
+        await supabase.from('payables').delete().eq('client_id', resolvedClientId)
+        await supabase.from('payables').insert(payablesPayload)
       }
     } catch (err) {
-      console.warn('Aviso ao persistir receivables no Supabase:', err)
-    }
-
-    // e) Salvar Contas a Pagar Reais da Conta Azul com Limpeza Prévia e Persistência Auditada
-    try {
-      const payablesPayload = INITIAL_PAYABLES.map((p, idx) => ({
-        client_id: resolvedClientId,
-        ca_payable_id: p.id,
-        supplier_name: p.supplier || 'Fornecedor',
-        category_name: p.category || 'Fornecedores & Insumos',
-        description: p.description || `Pagamento - ${p.supplier || 'Fornecedor'}`,
-        amount: Number(p.amount || 0),
-        paid_amount: Number(p.amountPaid || 0),
-        due_date: p.dueDate,
-        status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
-        barcode: p.barcode || null,
-        notes: 'Sincronizado via Conta Azul'
-      }))
-
-      // Limpeza atômica dos registros antigos de contas a pagar deste cliente
-      await supabase.from('payables').delete().eq('client_id', resolvedClientId)
-
-      // Inserção no Supabase
-      const { error: insertPayErr } = await supabase.from('payables').insert(payablesPayload)
-      if (insertPayErr) {
-        console.warn('Aviso no lote de payables:', insertPayErr.message)
-      }
-    } catch (err) {
-      console.warn('Aviso ao persistir payables no Supabase:', err)
+      console.warn('Aviso ao persistir dados da Conta Azul no Supabase:', err)
     }
 
     // f) Atualizar Status e Horário da Conexão Conta Azul

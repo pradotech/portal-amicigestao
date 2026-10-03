@@ -33,9 +33,7 @@ import {
   persistBlingSyncToSupabase,
   signOutSupabase,
   getSupabaseSession,
-  DEFAULT_CLIENTS,
-  INITIAL_PAYABLES,
-  INITIAL_RECEIVABLES
+  DEFAULT_CLIENTS
 } from './services/supabase'
 import {
   syncRealContaAzulData,
@@ -55,9 +53,7 @@ import {
   syncRealBlingData,
   refreshBlingAccessToken,
   checkAndAutoRenewBlingToken,
-  getBlingTokenExpirationInfo,
-  BLING_INITIAL_PAYABLES,
-  BLING_INITIAL_RECEIVABLES
+  getBlingTokenExpirationInfo
 } from './services/blingService'
 import { RefreshCw } from 'lucide-react'
 
@@ -395,8 +391,8 @@ export function App() {
       }
 
       // Para Drillex (Amici Gestão), carrega do Supabase / Conta Azul
-      setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : INITIAL_PAYABLES)
-      setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : INITIAL_RECEIVABLES)
+      setPayables(supaPayables || [])
+      setReceivables(supaReceivables || [])
       setTransactions(supaTx || [])
       setRawPessoas(supaPessoas || [])
     } catch (err) {
@@ -405,8 +401,8 @@ export function App() {
         setPayables([])
         setReceivables([])
       } else {
-        setPayables(INITIAL_PAYABLES)
-        setReceivables(INITIAL_RECEIVABLES)
+        setPayables([])
+        setReceivables([])
       }
     }
   }
@@ -453,8 +449,8 @@ export function App() {
             fetchCounterpartiesFromSupabase(targetId)
           ])
 
-          setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : BLING_INITIAL_PAYABLES)
-          setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : BLING_INITIAL_RECEIVABLES)
+          setPayables(supaPayables || [])
+          setReceivables(supaReceivables || [])
           setTransactions(supaTx || [])
           setRawPessoas(supaPessoas || [])
 
@@ -497,12 +493,12 @@ export function App() {
             fetchCounterpartiesFromSupabase(targetId)
           ])
 
-          setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : INITIAL_PAYABLES)
-          setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : INITIAL_RECEIVABLES)
+          setPayables(supaPayables || [])
+          setReceivables(supaReceivables || [])
           setTransactions(supaTx || [])
           setRawPessoas(supaPessoas || [])
 
-          const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : INITIAL_RECEIVABLES.length
+          const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : [].length
           setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${countRec} contas a receber)!`)
         } else {
           // Se a API retornou expirada (401), recarrega os dados intactos do Supabase

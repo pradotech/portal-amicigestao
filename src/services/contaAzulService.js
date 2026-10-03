@@ -4,7 +4,7 @@
  * Base URL Oficial: https://api-v2.contaazul.com
  */
 
-import { updateContaAzulIntegrationToken, INITIAL_PAYABLES, INITIAL_RECEIVABLES } from './supabase'
+import { updateContaAzulIntegrationToken } from './supabase'
 
 const DEFAULT_CLIENT_ID = '510utbibu9gb6002lerhav28tk'
 const DEFAULT_CLIENT_SECRET = '7iotvc8bqcunp3m21u6htv5ti639skkvpm9eaqjosg5ks4ufhi4'
@@ -113,30 +113,18 @@ export function getContaAzulAuthHeaders(tokenOverride) {
 }
 
 /**
- * Helper de requisição resiliente com renovação automática (Auto-Refresh) e fallback de endpoints
+ * Helper de requisição resiliente com renovação automática (Auto-Refresh) via proxy anti-CORS
  */
 async function fetchContaAzulApi(endpoint, tokenOverride, options = {}) {
   let headers = getContaAzulAuthHeaders(tokenOverride)
-  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  
-  const proxyUrl = `/api-contaazul${endpoint}`
-  const directUrl = `https://api-v2.contaazul.com${endpoint}`
-  
-  const primaryUrl = isDev ? proxyUrl : directUrl
-  const secondaryUrl = isDev ? directUrl : proxyUrl
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const primaryUrl = `/api-contaazul${cleanEndpoint}`
 
   try {
     let res = await fetch(primaryUrl, {
       ...options,
       headers: { ...headers, ...(options.headers || {}) }
     })
-
-    if (!res.ok && res.status === 404) {
-      res = await fetch(secondaryUrl, {
-        ...options,
-        headers: { ...headers, ...(options.headers || {}) }
-      })
-    }
 
     // Se retornar 401 (token expirado), tenta renovar automaticamente em segundo plano e repete a chamada
     if (!res.ok && res.status === 401) {
@@ -148,25 +136,13 @@ async function fetchContaAzulApi(endpoint, tokenOverride, options = {}) {
           ...options,
           headers: { ...headers, ...(options.headers || {}) }
         })
-        if (!res.ok && res.status === 404) {
-          res = await fetch(secondaryUrl, {
-            ...options,
-            headers: { ...headers, ...(options.headers || {}) }
-          })
-        }
       }
     }
 
     return res
   } catch (err) {
-    try {
-      return await fetch(secondaryUrl, {
-        ...options,
-        headers: { ...headers, ...(options.headers || {}) }
-      })
-    } catch {
-      throw err
-    }
+    console.warn(`Aviso na requisição à API Conta Azul (${primaryUrl}):`, err.message)
+    return { ok: false, status: 500, json: async () => ({}) }
   }
 }
 
@@ -272,75 +248,14 @@ export async function fetchContaAzulVendas(pagina = 1, tamanho = 100, queryParam
 }
 
 /**
- * Busca abrangente e determinística de todas as Contas a Receber e Vendas da Conta Azul via OpenAPI Financeiro e Vendas
+ * Busca abrangente e determinística de todas as Contas a Receber e Vendas da Conta Azul via OpenAPI (/v1/venda/busca)
  */
 export async function fetchAllRecentContaAzulVendas(tokenOverride) {
   const allReceivablesMap = new Map()
 
-  // 1. Consultar Endpoints Oficiais do Módulo Financeiro (Contas a Receber)
-  const financialReceivableEndpoints = [
-    '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar?pagina=1&tamanho_pagina=100',
-    '/v1/financeiro/eventos-financeiros/contas-a-receber?pagina=1&tamanho_pagina=100',
-    '/v1/financeiro/contas-a-receber/buscar?pagina=1&tamanho_pagina=100',
-    '/v1/financeiro/contas-a-receber?pagina=1&tamanho_pagina=100',
-    '/v1/financeiro/eventos-financeiros?pagina=1&tamanho_pagina=100&tipo=RECEITA'
-  ]
-
-  for (const endpoint of financialReceivableEndpoints) {
-    try {
-      const res = await fetchContaAzulApi(endpoint, tokenOverride)
-      if (res.ok) {
-        const data = await res.json()
-        const list = data.itens || data.items || data.receitas || data.contas_a_receber || data.eventos || (Array.isArray(data) ? data : [])
-        if (Array.isArray(list) && list.length > 0) {
-          list.forEach((item, itemIdx) => {
-            if (item) {
-              const itemId = String(item.id || item.id_evento || item.id_parcela || item.numero || `rec_fin_${itemIdx}`)
-              allReceivablesMap.set(itemId, item)
-            }
-          })
-          console.log(`✓ Obtidos ${list.length} registros de contas a receber financeiras via ${endpoint}`)
-
-          // Paginação completa se houver mais páginas
-          const totalPages = data.total_de_paginas || data.totalPages || (data.itens_totais ? Math.ceil(data.itens_totais / 100) : 1)
-          if (totalPages > 1) {
-            for (let p = 2; p <= Math.min(totalPages, 15); p++) {
-              try {
-                const nextUrl = endpoint.replace('pagina=1', `pagina=${p}`)
-                const nextRes = await fetchContaAzulApi(nextUrl, tokenOverride)
-                if (nextRes.ok) {
-                  const nextData = await nextRes.json()
-                  const nextList = nextData.itens || nextData.items || []
-                  nextList.forEach((item, nextIdx) => {
-                    if (item) {
-                      const itemId = String(item.id || item.id_evento || item.id_parcela || `rec_fin_p${p}_${nextIdx}`)
-                      allReceivablesMap.set(itemId, item)
-                    }
-                  })
-                }
-              } catch (e) {
-                console.warn(`Erro na página ${p} de recebíveis:`, e.message)
-              }
-            }
-          }
-
-          // Se obtivemos sucesso neste endpoint canônico, não consulta os demais para evitar duplicatas
-          break
-        }
-      }
-    } catch (err) {
-      console.warn(`Tentativa em ${endpoint} falhou:`, err.message)
-    }
-  }
-
-  // Se já obtivemos os títulos financeiros oficiais, retornamos diretamente
-  if (allReceivablesMap.size > 0) {
-    return Array.from(allReceivablesMap.values())
-  }
-
-  // 2. Fallback: Busca módulo comercial de Vendas da Conta Azul (/v1/venda/busca) de forma paginada e determinística
+  // Busca módulo de Vendas da Conta Azul (/v1/venda/busca) de forma paginada
   try {
-    const maxPages = 8
+    const maxPages = 10
     for (let p = 1; p <= maxPages; p++) {
       const pageList = await fetchContaAzulVendas(p, 100, '', tokenOverride)
       if (Array.isArray(pageList) && pageList.length > 0) {
@@ -361,112 +276,48 @@ export async function fetchAllRecentContaAzulVendas(tokenOverride) {
 
   const allVendasList = Array.from(allReceivablesMap.values())
 
-  // 3. Detalhamento seguro e ordenado das vendas recentes (2026) para extrair parcelas reais sem estourar rate limit
+  // Detalhamento das vendas para extrair parcelas reais quando necessário
   const vendasParaDetalhar = allVendasList.filter(v => {
     if (!v || !v.id) return false
-    const dateStr = String(v.emissao || v.data || v.data_emissao || v.data_venda || '')
-    const isRecent = dateStr.startsWith('2026') || Number(v.numero) >= 1500
-    return isRecent && !v.condicao_pagamento && !v.parcelas && !v.parcelas_financeiras
-  })
+    return !v.condicao_pagamento && !v.parcelas && !v.parcelas_financeiras
+  }).slice(0, 30) // Limite de 30 para performance e não estourar rate-limit
 
-  const detailedVendasMap = new Map()
-  const CHUNK_SIZE = 8
-  for (let i = 0; i < vendasParaDetalhar.length; i += CHUNK_SIZE) {
-    const chunk = vendasParaDetalhar.slice(i, i + CHUNK_SIZE)
-    const details = await Promise.all(
-      chunk.map(async (v) => {
-        try {
-          const res = await fetchContaAzulApi(`/v1/venda/${v.id}`, tokenOverride)
-          if (res.ok) {
-            const data = await res.json()
-            return { id: v.id, ...v, ...(data.venda || data), cliente: data.cliente || v.cliente }
-          }
-        } catch {}
-        return v
+  if (vendasParaDetalhar.length > 0) {
+    const detailedVendasMap = new Map()
+    const CHUNK_SIZE = 5
+    for (let i = 0; i < vendasParaDetalhar.length; i += CHUNK_SIZE) {
+      const chunk = vendasParaDetalhar.slice(i, i + CHUNK_SIZE)
+      const details = await Promise.all(
+        chunk.map(async (v) => {
+          try {
+            const res = await fetchContaAzulApi(`/v1/venda/${v.id}`, tokenOverride)
+            if (res.ok) {
+              const data = await res.json()
+              return { id: v.id, ...v, ...(data.venda || data), cliente: data.cliente || v.cliente }
+            }
+          } catch {}
+          return v
+        })
+      )
+      details.forEach(d => {
+        if (d && d.id) detailedVendasMap.set(String(d.id), d)
       })
-    )
-    details.forEach(d => {
-      if (d && d.id) detailedVendasMap.set(String(d.id), d)
-    })
-    // Micro delay de 80ms entre chunks para respeitar rate limit da API Conta Azul
-    if (i + CHUNK_SIZE < vendasParaDetalhar.length) {
-      await new Promise(r => setTimeout(r, 80))
     }
+    return allVendasList.map(v => (v.id && detailedVendasMap.get(String(v.id))) || v)
   }
 
-  return allVendasList.map(v => (v.id && detailedVendasMap.get(String(v.id))) || v)
+  return allVendasList
 }
 
 /**
- * 6. GET /v1/financeiro/eventos-financeiros/contas-a-pagar/buscar (Contas a Pagar e Despesas Oficiais)
+ * 6. GET /v1/compras/busca (Contas a Pagar e Despesas Oficiais da Conta Azul)
  */
 export async function fetchAllContaAzulDespesas(tokenOverride) {
   const allDespesasMap = new Map()
 
-  // Candidatos de endpoints da API Financeira da Conta Azul para Contas a Pagar / Despesas
-  const candidateEndpoints = [
-    '/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar?pagina=1&tamanho_pagina=100',
-    '/v1/financeiro/eventos-financeiros/contas-a-pagar?pagina=1&tamanho_pagina=100',
-    '/v1/financeiro/contas-a-pagar/buscar?pagina=1&tamanho_pagina=100',
-    '/v1/financeiro/contas-a-pagar?pagina=1&tamanho_pagina=100',
-    '/v1/financeiro/eventos-financeiros?pagina=1&tamanho_pagina=100&tipo=DESPESA'
-  ]
-
-  for (const endpoint of candidateEndpoints) {
-    try {
-      const res = await fetchContaAzulApi(endpoint, tokenOverride)
-      if (res.ok) {
-        const data = await res.json()
-        const list = data.itens || data.items || data.despesas || data.contas_a_pagar || data.eventos || (Array.isArray(data) ? data : [])
-        if (Array.isArray(list) && list.length > 0) {
-          list.forEach((item, itemIdx) => {
-            if (item) {
-              const itemId = String(item.id || item.id_evento || item.id_parcela || item.numero || `desp_fin_${itemIdx}`)
-              allDespesasMap.set(itemId, item)
-            }
-          })
-          console.log(`✓ Obtidos ${list.length} registros de contas a pagar via ${endpoint}`)
-
-          // Paginação completa se houver mais páginas
-          const totalPages = data.total_de_paginas || data.totalPages || (data.itens_totais ? Math.ceil(data.itens_totais / 100) : 1)
-          if (totalPages > 1) {
-            for (let p = 2; p <= Math.min(totalPages, 15); p++) {
-              try {
-                const nextUrl = endpoint.replace('pagina=1', `pagina=${p}`)
-                const nextRes = await fetchContaAzulApi(nextUrl, tokenOverride)
-                if (nextRes.ok) {
-                  const nextData = await nextRes.json()
-                  const nextList = nextData.itens || nextData.items || []
-                  nextList.forEach((item, nextIdx) => {
-                    if (item) {
-                      const itemId = String(item.id || item.id_evento || item.id_parcela || `desp_fin_p${p}_${nextIdx}`)
-                      allDespesasMap.set(itemId, item)
-                    }
-                  })
-                }
-              } catch (e) {
-                console.warn(`Erro na página ${p} de despesas:`, e.message)
-              }
-            }
-          }
-
-          // Se obtivemos sucesso neste endpoint canônico, não consulta os demais para evitar duplicatas
-          break
-        }
-      }
-    } catch (err) {
-      console.warn(`Tentativa em ${endpoint} falhou:`, err.message)
-    }
-  }
-
-  // Se já obtivemos as despesas financeiras oficiais, retornamos diretamente
-  if (allDespesasMap.size > 0) {
-    return Array.from(allDespesasMap.values())
-  }
-
-  // Fallback para compras comerciais de forma paginada e determinística
   try {
-    for (let p = 1; p <= 5; p++) {
+    const maxPages = 10
+    for (let p = 1; p <= maxPages; p++) {
       const res = await fetchContaAzulApi(`/v1/compras/busca?pagina=${p}&tamanho_pagina=100`, tokenOverride)
       if (res.ok) {
         const data = await res.json()
@@ -474,7 +325,7 @@ export async function fetchAllContaAzulDespesas(tokenOverride) {
         if (Array.isArray(list) && list.length > 0) {
           list.forEach((item, itemIdx) => {
             if (item) {
-              const itemId = String(item.id || `compra_p${p}_${itemIdx}`)
+              const itemId = String(item.id || item.numero || `compra_p${p}_${itemIdx}`)
               allDespesasMap.set(itemId, item)
             }
           })
@@ -614,10 +465,10 @@ export async function refreshContaAzulAccessToken(targetClient) {
   const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   
   const tokenUrls = [
-    isDev ? '/api-contaazul/oauth/token' : 'https://api-v2.contaazul.com/oauth/token',
-    isDev ? '/api-contaazul/oauth2/token' : 'https://api-v2.contaazul.com/oauth2/token',
-    isDev ? '/api-ca-v1/oauth2/token' : 'https://api.contaazul.com/oauth2/token',
-    isDev ? '/api-ca-v1/oauth/token' : 'https://api.contaazul.com/oauth/token',
+    '/api-contaazul/oauth/token',
+    '/api-contaazul/oauth2/token',
+    '/api-ca-v1/oauth2/token',
+    '/api-ca-v1/oauth/token',
     'https://api-v2.contaazul.com/oauth/token',
     'https://api.contaazul.com/oauth2/token'
   ]
@@ -1122,11 +973,6 @@ export async function syncRealContaAzulData(targetClient, onProgress = () => {})
         costCenter: d.centro_custo?.nome || d.centro_de_custo?.nome || ''
       })
     })
-  } else {
-    mappedPayables = INITIAL_PAYABLES.map(p => ({
-      ...p,
-      clientId: clientId
-    }))
   }
 
   // Ordena de forma determinística por data de vencimento
