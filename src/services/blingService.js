@@ -259,44 +259,54 @@ export const BLING_INITIAL_RECEIVABLES = []
 export const BLING_INITIAL_COUNTERPARTIES = []
 
 /**
- * Helper de requisição resiliente com Proxy anti-CORS (/api-bling) e fallback
+ * Helper de requisição resiliente com Proxy anti-CORS (/api-bling) e renovação automática de token
  */
 async function fetchBlingApi(endpoint, apiKey, options = {}) {
   const config = getBlingConfig()
-  const token = apiKey || config.accessToken || config.apiKey
-  if (!token) return { ok: false, data: [] }
+  let token = apiKey || config.accessToken || config.apiKey
+  if (!token) return { ok: false, status: 401, data: [], error: 'Token não configurado' }
 
-  const headers = {
+  let headers = {
     'Authorization': `Bearer ${token}`,
     'Accept': 'application/json',
     ...(options.headers || {})
   }
 
-  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const primaryUrl = `/api-bling${cleanEndpoint}`
 
-  const urls = [
-    `/api-bling${cleanEndpoint}`,
-    `https://www.bling.com.br/Api/v3${cleanEndpoint}`
-  ]
+  try {
+    let res = await fetch(primaryUrl, {
+      ...options,
+      headers
+    })
 
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, {
-        ...options,
-        headers
-      })
-
-      if (res.ok) {
-        const json = await res.json()
-        return { ok: true, data: json.data || json || [] }
+    // Se retornar 401 (token expirado), tenta auto-refresh com o Refresh Token
+    if (!res.ok && res.status === 401) {
+      console.log('🔄 Bling ERP: Token expirou (401). Tentando auto-refresh com Refresh Token...')
+      const refreshed = await refreshBlingAccessToken()
+      if (refreshed && refreshed.success && refreshed.accessToken) {
+        token = refreshed.accessToken
+        headers['Authorization'] = `Bearer ${token}`
+        res = await fetch(primaryUrl, {
+          ...options,
+          headers
+        })
       }
-    } catch (err) {
-      // Tenta a próxima URL
     }
-  }
 
-  return { ok: false, data: [] }
+    if (res.ok) {
+      const json = await res.json()
+      return { ok: true, status: res.status, data: json.data || json || [] }
+    }
+
+    const errText = await res.text()
+    console.warn(`[Bling API] Resposta ${res.status} em ${cleanEndpoint}:`, errText)
+    return { ok: false, status: res.status, data: [], error: errText }
+  } catch (err) {
+    console.warn(`[Bling API] Falha de conexão em ${cleanEndpoint}:`, err.message)
+    return { ok: false, status: 500, data: [], error: err.message }
+  }
 }
 
 /**
