@@ -317,48 +317,129 @@ export const BLING_INITIAL_PAYABLES = [
   }
 ]
 
+export const BLING_OCTOBER_SALES_SUMMARY = {
+  totalFaturado: 9269.85,
+  totalEmAberto: 2400.00,
+  pedidosAtendidosCount: 5,
+  pedidosEmAbertoCount: 1,
+  totalPecas: 269,
+  ticketMedio: 1853.97,
+  estado: 'SP',
+  freteMedio: 0.00,
+  produtos: [
+    { codigo: '1142', descricao: 'CORDAO 100 LEDS C/STROBO 220V - FIO VERDE - BQ', quantidade: 96, custo: 0.00, valor: 2592.00, margem: 100 },
+    { codigo: '1153', descricao: 'CASCATA 400 LEDS 220V - BQ', quantidade: 20, custo: 0.00, valor: 1954.00, margem: 100 },
+    { codigo: '1237', descricao: 'CORDAO 100 LEDS FIXO 10M 220V VERDE', quantidade: 48, custo: 0.00, valor: 1248.00, margem: 100 },
+    { codigo: '1152', descricao: 'CASCATA 400 LEDS COLORIDO - 220V', quantidade: 20, custo: 0.00, valor: 900.00, margem: 100 },
+    { codigo: '122536', descricao: 'LUM PEND 12" PRISM - LP 1227 PCF', quantidade: 12, custo: 0.00, valor: 661.20, margem: 100 },
+    { codigo: '122356', descricao: 'LUM PEND 16" PRISM - LP 1627 PCF', quantidade: 11, custo: 0.00, valor: 619.50, margem: 100 },
+    { codigo: '300217', descricao: 'REATOR MET 220V/150W - AE1528 MTPH', quantidade: 5, custo: 0.00, valor: 400.00, margem: 100 },
+    { codigo: '1243', descricao: 'PISCA PISCA - 8 FUN FIO VERDE - 220V - BRANCO QUENTE', quantidade: 48, custo: 0.00, valor: 360.00, margem: 100 }
+  ]
+}
+
 export const BLING_INITIAL_RECEIVABLES = [
   {
     id: 'rec-bling-001',
     clientId: 'd0000000-0000-0000-0000-000000000002',
     customer: 'Distribuidora Iluminação Brasil S/A',
     customerName: 'Distribuidora Iluminação Brasil S/A',
-    description: 'Faturamento Pedido #4820 - 500x Refletores LED 200W',
-    dueDate: '2026-10-20',
-    amount: 185000.00,
-    status: 'pending',
+    description: 'Pedido #1142 - Cordão 100 LEDs c/ Strobo 220V BQ (96 un)',
+    dueDate: '2026-10-05',
+    amount: 2592.00,
+    amountPaid: 2592.00,
+    amountRemaining: 0,
+    status: 'received',
     category: 'Receita de Vendas de Iluminação (Comex)',
     bankAccount: 'Itaú PJ',
     erpProvider: 'Bling ERP v3',
-    documentNumber: 'NF-e 14820'
+    documentNumber: 'NF-e 1142',
+    state: 'SP'
   },
   {
     id: 'rec-bling-002',
     clientId: 'd0000000-0000-0000-0000-000000000002',
     customer: 'Eletro Watts Materiais Elétricos Ltda',
     customerName: 'Eletro Watts Materiais Elétricos Ltda',
-    description: 'Faturamento Pedido #4812 - Luminárias LED Industriais',
-    dueDate: '2026-10-25',
-    amount: 94500.00,
-    status: 'pending',
+    description: 'Pedido #1153 - Cascata 400 LEDs 220V BQ (20 un)',
+    dueDate: '2026-10-10',
+    amount: 1954.00,
+    amountPaid: 1954.00,
+    amountRemaining: 0,
+    status: 'received',
     category: 'Receita de Vendas de Iluminação (Comex)',
     bankAccount: 'Itaú PJ',
     erpProvider: 'Bling ERP v3',
-    documentNumber: 'NF-e 14812'
+    documentNumber: 'NF-e 1153',
+    state: 'SP'
   },
   {
     id: 'rec-bling-003',
     clientId: 'd0000000-0000-0000-0000-000000000002',
     customer: 'Luz & Arte Projetos Corporativos',
     customerName: 'Luz & Arte Projetos Corporativos',
-    description: 'Faturamento Pedido #4790 - Fitas e Perfis LED Architectural',
-    dueDate: '2026-10-12',
-    amount: 63200.00,
-    status: 'paid',
+    description: 'Pedido #1237 - Cordão 100 LEDs Fixo 10M Verde (48 un)',
+    dueDate: '2026-10-14',
+    amount: 1248.00,
+    amountPaid: 1248.00,
+    amountRemaining: 0,
+    status: 'received',
     category: 'Receita de Vendas de Iluminação (Comex)',
-    bankAccount: 'Banco do Brasil',
+    bankAccount: 'Itaú PJ',
     erpProvider: 'Bling ERP v3',
-    documentNumber: 'NF-e 14790'
+    documentNumber: 'NF-e 1237',
+    state: 'SP'
+  },
+  {
+    id: 'rec-bling-004',
+    clientId: 'd0000000-0000-0000-0000-000000000002',
+    customer: 'Prisma Comercial de Elétrica Ltda',
+    customerName: 'Prisma Comercial de Elétrica Ltda',
+    description: 'Pedido #1152 / 122536 - Cascata LEDs + Lum Pend 12" Prism (32 un)',
+    dueDate: '2026-10-18',
+    amount: 1561.20,
+    amountPaid: 1561.20,
+    amountRemaining: 0,
+    status: 'received',
+    category: 'Receita de Vendas de Iluminação (Comex)',
+    bankAccount: 'Itaú PJ',
+    erpProvider: 'Bling ERP v3',
+    documentNumber: 'NF-e 1152',
+    state: 'SP'
+  },
+  {
+    id: 'rec-bling-005',
+    clientId: 'd0000000-0000-0000-0000-000000000002',
+    customer: 'Mega Luz Comércio Atacadista',
+    customerName: 'Mega Luz Comércio Atacadista',
+    description: 'Pedido #122356 / 300217 / 1243 - Lum Pend 16" + Reator Met + Pisca Pisca (64 un)',
+    dueDate: '2026-10-22',
+    amount: 1914.65,
+    amountPaid: 1914.65,
+    amountRemaining: 0,
+    status: 'received',
+    category: 'Receita de Vendas de Iluminação (Comex)',
+    bankAccount: 'Itaú PJ',
+    erpProvider: 'Bling ERP v3',
+    documentNumber: 'NF-e 1223',
+    state: 'SP'
+  },
+  {
+    id: 'rec-bling-006',
+    clientId: 'd0000000-0000-0000-0000-000000000002',
+    customer: 'Alpha Iluminação & Decor Ltda',
+    customerName: 'Alpha Iluminação & Decor Ltda',
+    description: 'Pedido #1250 - Luminárias Industriais High Bay LED 150W (12 un)',
+    dueDate: '2026-10-28',
+    amount: 2400.00,
+    amountPaid: 0.00,
+    amountRemaining: 2400.00,
+    status: 'pending',
+    category: 'Receita de Vendas de Iluminação (Comex)',
+    bankAccount: 'Itaú PJ',
+    erpProvider: 'Bling ERP v3',
+    documentNumber: 'NF-e 1250',
+    state: 'SP'
   }
 ]
 
@@ -531,84 +612,80 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
   const validLivePayables = livePayables.filter(p => p.situacao !== 4 && p.situacao !== 'cancelado')
   const validLiveReceivables = liveReceivables.filter(r => r.situacao !== 4 && r.situacao !== 'cancelado')
 
-  const mappedPayables = validLivePayables.length > 0
-    ? validLivePayables.map((p, idx) => {
-        const rawAmount = Number(p.valor || 0)
-        const rawSaldo = p.saldo !== undefined && p.saldo !== null ? Number(p.saldo) : (p.situacao === 2 ? 0 : rawAmount)
-        const isPaid = p.situacao === 2 || (rawAmount > 0 && rawSaldo === 0)
-        const isPartial = p.situacao === 3 || (!isPaid && rawSaldo > 0 && rawSaldo < rawAmount)
-        const paidAmount = isPaid ? rawAmount : (isPartial ? Math.max(0, rawAmount - rawSaldo) : 0)
-        const dueDate = p.vencimento || p.dataVencimento || todayStr
+  const mappedPayables = validLivePayables.map((p, idx) => {
+    const rawAmount = Number(p.valor || 0)
+    const rawSaldo = p.saldo !== undefined && p.saldo !== null ? Number(p.saldo) : (p.situacao === 2 ? 0 : rawAmount)
+    const isPaid = p.situacao === 2 || (rawAmount > 0 && rawSaldo === 0)
+    const isPartial = p.situacao === 3 || (!isPaid && rawSaldo > 0 && rawSaldo < rawAmount)
+    const paidAmount = isPaid ? rawAmount : (isPartial ? Math.max(0, rawAmount - rawSaldo) : 0)
+    const dueDate = p.vencimento || p.dataVencimento || todayStr
 
-        let status = 'scheduled'
-        if (isPaid) {
-          status = 'paid'
-        } else if (isPartial) {
-          status = 'partial'
-        } else if (dueDate < todayStr) {
-          status = 'overdue'
-        } else if (dueDate === todayStr) {
-          status = 'today'
-        }
+    let status = 'scheduled'
+    if (isPaid) {
+      status = 'paid'
+    } else if (isPartial) {
+      status = 'partial'
+    } else if (dueDate < todayStr) {
+      status = 'overdue'
+    } else if (dueDate === todayStr) {
+      status = 'today'
+    }
 
-        return {
-          id: `bling-pay-${p.id || idx}`,
-          clientId: clientId,
-          description: p.historico || p.descricao || `Pagamento Bling #${p.id || idx + 1}`,
-          supplier: p.contato?.nome || p.fornecedor?.nome || 'Fornecedor Bling',
-          dueDate: dueDate,
-          amount: rawAmount,
-          amountPaid: paidAmount,
-          amountRemaining: isPaid ? 0 : rawSaldo,
-          status: status,
-          category: p.categoria?.descricao || p.categoria?.nome || 'Importação & Fornecedores',
-          bankAccount: p.portador?.nome || p.portador?.descricao || 'Itaú Comex Câmbio',
-          erpProvider: 'Bling ERP v3',
-          documentNumber: String(p.numeroDocumento || p.id || ''),
-          barcode: p.codigoBarras || p.linhaDigitavel || null
-        }
-      })
-    : BLING_INITIAL_PAYABLES.map(p => ({ ...p, clientId }))
+    return {
+      id: `bling-pay-${p.id || idx}`,
+      clientId: clientId,
+      description: p.historico || p.descricao || `Pagamento Bling #${p.id || idx + 1}`,
+      supplier: p.contato?.nome || p.fornecedor?.nome || 'Fornecedor Bling',
+      dueDate: dueDate,
+      amount: rawAmount,
+      amountPaid: paidAmount,
+      amountRemaining: isPaid ? 0 : rawSaldo,
+      status: status,
+      category: p.categoria?.descricao || p.categoria?.nome || 'Importação & Fornecedores',
+      bankAccount: p.portador?.nome || p.portador?.descricao || 'Itaú Comex Câmbio',
+      erpProvider: 'Bling ERP v3',
+      documentNumber: String(p.numeroDocumento || p.id || ''),
+      barcode: p.codigoBarras || p.linhaDigitavel || null
+    }
+  })
 
-  const mappedReceivables = validLiveReceivables.length > 0
-    ? validLiveReceivables.map((r, idx) => {
-        const rawAmount = Number(r.valor || 0)
-        const rawSaldo = r.saldo !== undefined && r.saldo !== null ? Number(r.saldo) : (r.situacao === 2 ? 0 : rawAmount)
-        const isReceived = r.situacao === 2 || (rawAmount > 0 && rawSaldo === 0)
-        const isPartial = r.situacao === 3 || (!isReceived && rawSaldo > 0 && rawSaldo < rawAmount)
-        const receivedAmount = isReceived ? rawAmount : (isPartial ? Math.max(0, rawAmount - rawSaldo) : 0)
-        const dueDate = r.vencimento || r.dataVencimento || todayStr
+  const mappedReceivables = validLiveReceivables.map((r, idx) => {
+    const rawAmount = Number(r.valor || 0)
+    const rawSaldo = r.saldo !== undefined && r.saldo !== null ? Number(r.saldo) : (r.situacao === 2 ? 0 : rawAmount)
+    const isReceived = r.situacao === 2 || (rawAmount > 0 && rawSaldo === 0)
+    const isPartial = r.situacao === 3 || (!isReceived && rawSaldo > 0 && rawSaldo < rawAmount)
+    const receivedAmount = isReceived ? rawAmount : (isPartial ? Math.max(0, rawAmount - rawSaldo) : 0)
+    const dueDate = r.vencimento || r.dataVencimento || todayStr
 
-        let status = 'pending'
-        if (isReceived) {
-          status = 'received'
-        } else if (isPartial) {
-          status = 'partial'
-        } else if (dueDate < todayStr) {
-          status = 'overdue'
-        } else if (dueDate === todayStr) {
-          status = 'today'
-        }
+    let status = 'pending'
+    if (isReceived) {
+      status = 'received'
+    } else if (isPartial) {
+      status = 'partial'
+    } else if (dueDate < todayStr) {
+      status = 'overdue'
+    } else if (dueDate === todayStr) {
+      status = 'today'
+    }
 
-        return {
-          id: `bling-rec-${r.id || idx}`,
-          clientId: clientId,
-          customer: r.contato?.nome || r.cliente?.nome || 'Cliente BR Lumens',
-          customerName: r.contato?.nome || r.cliente?.nome || 'Cliente BR Lumens',
-          description: r.historico || r.descricao || `Recebimento Bling #${r.id || idx + 1}`,
-          dueDate: dueDate,
-          amount: rawAmount,
-          amountPaid: receivedAmount,
-          amountRemaining: isReceived ? 0 : rawSaldo,
-          status: status,
-          category: r.categoria?.descricao || r.categoria?.nome || 'Venda de Iluminação LED (Comex)',
-          bankAccount: r.portador?.nome || r.portador?.descricao || 'Itaú PJ',
-          erpProvider: 'Bling ERP v3',
-          documentNumber: String(r.numeroDocumento || r.id || ''),
-          paymentMethod: r.formaPagamento?.descricao || 'Boleto / PIX'
-        }
-      })
-    : BLING_INITIAL_RECEIVABLES.map(r => ({ ...r, clientId }))
+    return {
+      id: `bling-rec-${r.id || idx}`,
+      clientId: clientId,
+      customer: r.contato?.nome || r.cliente?.nome || 'Cliente BR Lumens',
+      customerName: r.contato?.nome || r.cliente?.nome || 'Cliente BR Lumens',
+      description: r.historico || r.descricao || `Recebimento Bling #${r.id || idx + 1}`,
+      dueDate: dueDate,
+      amount: rawAmount,
+      amountPaid: receivedAmount,
+      amountRemaining: isReceived ? 0 : rawSaldo,
+      status: status,
+      category: r.categoria?.descricao || r.categoria?.nome || 'Venda de Iluminação LED (Comex)',
+      bankAccount: r.portador?.nome || r.portador?.descricao || 'Itaú PJ',
+      erpProvider: 'Bling ERP v3',
+      documentNumber: String(r.numeroDocumento || r.id || ''),
+      paymentMethod: r.formaPagamento?.descricao || 'Boleto / PIX'
+    }
+  })
 
   onProgress({ step: 'done', message: `✓ Dados da BR Lumens sincronizados com sucesso via Bling API v3!`, progress: 100 })
 

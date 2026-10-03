@@ -58,8 +58,15 @@ export function BrlumensCustomersView({
     filterByDate
   } = dateFilter
 
+  // Garante isolamento estrito: apenas títulos da BR Lumens (Bling ERP)
+  const clientReceivables = receivables.filter(r => 
+    r.clientId === 'd0000000-0000-0000-0000-000000000002' ||
+    r.erpProvider === 'Bling ERP v3' ||
+    String(r.id).startsWith('bling-')
+  )
+
   // Filtra lançamentos do Bling pelo período selecionado no DateFilterBar
-  const dateFilteredReceivables = filterByDate(receivables, 'dueDate')
+  const dateFilteredReceivables = filterByDate(clientReceivables, 'dueDate')
 
   const filteredReceivables = dateFilteredReceivables.filter(receivable => {
     const desc = receivable.description || ''

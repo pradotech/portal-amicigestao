@@ -8,6 +8,7 @@ import { DrillexCustomersView } from './views/DrillexCustomersView'
 import { BrlumensSuppliersView } from './views/brlumens/BrlumensSuppliersView'
 import { BrlumensCustomersView } from './views/brlumens/BrlumensCustomersView'
 import { BrlumensSyncView } from './views/brlumens/BrlumensSyncView'
+import { BrlumensDashboardView } from './views/brlumens/BrlumensDashboardView'
 import { ReconciliationView } from './views/ReconciliationView'
 import { DreReportsView } from './views/DreReportsView'
 import { ContaAzulSyncView } from './views/ContaAzulSyncView'
@@ -364,49 +365,49 @@ export function App() {
 
     const currentClient = clients.find(c => c.id === targetId) || selectedClient
     const isBling = isBlingClient(currentClient)
-
-    if (isBling) {
-      // Para a BR Lumens (Amici Comex), consome exclusivamente da API Bling ERP (v3)
-      try {
-        const syncResult = await syncRealBlingData(currentClient)
-        if (syncResult && syncResult.success && syncResult.payables && syncResult.payables.length > 0) {
-          setPayables(syncResult.payables)
-          setReceivables(syncResult.receivables)
-          setTransactions([])
-          setRawPessoas([])
-          return
-        }
-      } catch (err) {
-        console.warn('Aviso ao sincronizar dados do Bling:', err)
-      }
-
-      setPayables(BLING_INITIAL_PAYABLES.map(p => ({ ...p, clientId: targetId })))
-      setReceivables(BLING_INITIAL_RECEIVABLES.map(r => ({ ...r, clientId: targetId })))
-      setTransactions([])
-      setRawPessoas([])
-      return
-    }
-
-    // Para Drillex (Amici Gestão), carrega do Supabase / Conta Azul
-    const defaultPayables = INITIAL_PAYABLES
-    const defaultReceivables = INITIAL_RECEIVABLES
+    const resolvedId = targetId.includes('-') && targetId.length === 36
+      ? targetId
+      : (isBling ? 'd0000000-0000-0000-0000-000000000002' : 'd0000000-0000-0000-0000-000000000001')
 
     try {
       const [supaPayables, supaReceivables, supaTx, supaPessoas] = await Promise.all([
-        fetchPayablesFromSupabase(targetId),
-        fetchReceivablesFromSupabase(targetId),
-        fetchBankTransactionsFromSupabase(targetId),
-        fetchCounterpartiesFromSupabase(targetId)
+        fetchPayablesFromSupabase(resolvedId),
+        fetchReceivablesFromSupabase(resolvedId),
+        fetchBankTransactionsFromSupabase(resolvedId),
+        fetchCounterpartiesFromSupabase(resolvedId)
       ])
 
-      setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : defaultPayables)
-      setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : defaultReceivables)
+      if (isBling) {
+        // Se a BR Lumens no Supabase ainda estiver vazia, sincroniza automaticamente com a API do Bling
+        if ((!supaReceivables || supaReceivables.length === 0) && (!supaPayables || supaPayables.length === 0)) {
+          setPayables([])
+          setReceivables([])
+          // Dispara primeira sincronização com o Bling ERP
+          handleSyncApi(currentClient)
+          return
+        }
+
+        setPayables(supaPayables || [])
+        setReceivables(supaReceivables || [])
+        setTransactions(supaTx || [])
+        setRawPessoas(supaPessoas || [])
+        return
+      }
+
+      // Para Drillex (Amici Gestão), carrega do Supabase / Conta Azul
+      setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : INITIAL_PAYABLES)
+      setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : INITIAL_RECEIVABLES)
       setTransactions(supaTx || [])
       setRawPessoas(supaPessoas || [])
     } catch (err) {
       console.warn('Erro ao carregar dados do Supabase para o cliente:', err)
-      setPayables(defaultPayables)
-      setReceivables(defaultReceivables)
+      if (isBling) {
+        setPayables([])
+        setReceivables([])
+      } else {
+        setPayables(INITIAL_PAYABLES)
+        setReceivables(INITIAL_RECEIVABLES)
+      }
     }
   }
 
@@ -858,16 +859,27 @@ export function App() {
           ) : (
             /* MODO BPO AMICI */
             <>
-              {/* 1. VISÃO GERAL / DASHBOARD DA DRILLEX */}
+              {/* 1. VISÃO GERAL / DASHBOARD */}
               {activeTab === 'dashboard' && (
-                <DashboardView
-                  clients={[selectedClient]}
-                  payables={payables}
-                  receivables={receivables}
-                  selectedClientId={selectedClient.id}
-                  onSelectClient={() => {}}
-                  onNavigateTab={setActiveTab}
-                />
+                isBlingClient(selectedClient) ? (
+                  <BrlumensDashboardView
+                    clients={[selectedClient]}
+                    payables={payables}
+                    receivables={receivables}
+                    selectedClientId={selectedClient.id}
+                    onSelectClient={() => {}}
+                    onNavigateTab={setActiveTab}
+                  />
+                ) : (
+                  <DashboardView
+                    clients={[selectedClient]}
+                    payables={payables}
+                    receivables={receivables}
+                    selectedClientId={selectedClient.id}
+                    onSelectClient={() => {}}
+                    onNavigateTab={setActiveTab}
+                  />
+                )
               )}
 
               {/* 2. FORNECEDORES & CONTAS A PAGAR DO CLIENTE */}

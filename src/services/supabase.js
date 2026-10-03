@@ -567,32 +567,35 @@ export async function fetchPayablesFromSupabase(clientId) {
       .order('due_date', { ascending: true })
 
     const isBlingClient = resolvedClientId === 'd0000000-0000-0000-0000-000000000002'
-    const defaultList = isBlingClient ? BLING_INITIAL_PAYABLES : INITIAL_PAYABLES
 
-    const hasData = data && data.length > 0
-
-    if (error || !data || data.length === 0) {
-      // Auto-recuperação: se a tabela de pagamentos estiver vazia, popula os lançamentos oficiais
-      try {
-        await supabase.from('payables').delete().eq('client_id', resolvedClientId)
-        const seedPayload = defaultList.map(p => ({
-          client_id: resolvedClientId,
-          ca_payable_id: p.id,
-          supplier_name: p.supplier,
-          category_name: p.category,
-          description: p.description,
-          amount: p.amount,
-          paid_amount: p.amountPaid || 0,
-          due_date: p.dueDate,
-          status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
-          barcode: p.barcode || p.barCode || null,
-          notes: isBlingClient ? 'Lançamento oficial BR Lumens via Bling ERP v3' : 'Lançamento oficial BPO Amici Conta Azul'
-        }))
-        await supabase.from('payables').insert(seedPayload)
-      } catch (seedErr) {
-        console.warn('Aviso ao auto-recuperar payables:', seedErr)
+    if (isBlingClient) {
+      if (error || !data || data.length === 0) {
+        return []
       }
-      return defaultList
+    } else {
+      if (error || !data || data.length === 0) {
+        // Auto-recuperação: se a tabela de pagamentos estiver vazia para a Drillex, popula os lançamentos oficiais
+        try {
+          await supabase.from('payables').delete().eq('client_id', resolvedClientId)
+          const seedPayload = INITIAL_PAYABLES.map(p => ({
+            client_id: resolvedClientId,
+            ca_payable_id: p.id,
+            supplier_name: p.supplier,
+            category_name: p.category,
+            description: p.description,
+            amount: p.amount,
+            paid_amount: p.amountPaid || 0,
+            due_date: p.dueDate,
+            status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
+            barcode: p.barcode || p.barCode || null,
+            notes: 'Lançamento oficial BPO Amici Conta Azul'
+          }))
+          await supabase.from('payables').insert(seedPayload)
+        } catch (seedErr) {
+          console.warn('Aviso ao auto-recuperar payables Drillex:', seedErr)
+        }
+        return INITIAL_PAYABLES
+      }
     }
 
     return data.map(p => {
@@ -883,36 +886,41 @@ export async function fetchReceivablesFromSupabase(clientId) {
       .order('due_date', { ascending: true })
 
     const isBlingClient = resolvedClientId === 'd0000000-0000-0000-0000-000000000002'
-    const defaultList = isBlingClient ? BLING_INITIAL_RECEIVABLES : INITIAL_RECEIVABLES
 
-    // Auto-recuperação: se a tabela de recebíveis estiver vazia para o cliente
-    const todayStr = new Date().toISOString().split('T')[0]
-    const hasCorruptedTodayCount = !isBlingClient && data && data.filter(r => r.due_date === todayStr).length > 20
-    const sepReceivedTotal = !isBlingClient && data ? data
-      .filter(r => r.due_date && r.due_date.startsWith('2026-09') && (r.status === 'received' || Number(r.received_amount) > 0))
-      .reduce((acc, r) => acc + Number(r.received_amount || r.amount || 0), 0) : (isBlingClient ? 100000 : 0)
-
-    if (error || !data || data.length === 0 || hasCorruptedTodayCount || (!isBlingClient && sepReceivedTotal < 50000)) {
-      try {
-        await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
-        const seedPayload = defaultList.map(r => ({
-          client_id: resolvedClientId,
-          ca_receivable_id: r.id,
-          customer_name: r.customer,
-          category_name: r.category,
-          description: r.description,
-          amount: r.amount,
-          received_amount: r.amountPaid || 0,
-          due_date: r.dueDate,
-          status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
-          payment_method: r.paymentMethod || 'boleto',
-          invoice_number: r.invoiceNumber || null
-        }))
-        await supabase.from('receivables').insert(seedPayload)
-      } catch (seedErr) {
-        console.warn('Aviso ao auto-recuperar receivables:', seedErr)
+    if (isBlingClient) {
+      if (error || !data || data.length === 0) {
+        return []
       }
-      return defaultList
+    } else {
+      // Auto-recuperação Drillex
+      const todayStr = new Date().toISOString().split('T')[0]
+      const hasCorruptedTodayCount = data && data.filter(r => r.due_date === todayStr).length > 20
+      const sepReceivedTotal = data ? data
+        .filter(r => r.due_date && r.due_date.startsWith('2026-09') && (r.status === 'received' || Number(r.received_amount) > 0))
+        .reduce((acc, r) => acc + Number(r.received_amount || r.amount || 0), 0) : 0
+
+      if (error || !data || data.length === 0 || hasCorruptedTodayCount || sepReceivedTotal < 50000) {
+        try {
+          await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
+          const seedPayload = INITIAL_RECEIVABLES.map(r => ({
+            client_id: resolvedClientId,
+            ca_receivable_id: r.id,
+            customer_name: r.customer,
+            category_name: r.category,
+            description: r.description,
+            amount: r.amount,
+            received_amount: r.amountPaid || 0,
+            due_date: r.dueDate,
+            status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
+            payment_method: r.paymentMethod || 'boleto',
+            invoice_number: r.invoiceNumber || null
+          }))
+          await supabase.from('receivables').insert(seedPayload)
+        } catch (seedErr) {
+          console.warn('Aviso ao auto-recuperar INITIAL_RECEIVABLES Drillex:', seedErr)
+        }
+        return INITIAL_RECEIVABLES
+      }
     }
 
     return data.map(r => {

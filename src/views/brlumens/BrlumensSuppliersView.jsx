@@ -67,8 +67,15 @@ export function BrlumensSuppliersView({
     filterByDate
   } = dateFilter
 
+  // Garante isolamento estrito: apenas títulos da BR Lumens (Bling ERP)
+  const clientPayables = payables.filter(p => 
+    p.clientId === 'd0000000-0000-0000-0000-000000000002' ||
+    p.erpProvider === 'Bling ERP v3' ||
+    String(p.id).startsWith('bling-')
+  )
+
   // Filtra lançamentos a pagar do Bling pelo período selecionado no DateFilterBar
-  const dateFilteredPayables = filterByDate(payables, 'dueDate')
+  const dateFilteredPayables = filterByDate(clientPayables, 'dueDate')
 
   // Aplica filtros adicionais de busca e status sobre os dados filtrados por data
   const filteredPayables = dateFilteredPayables.filter(payable => {
