@@ -160,21 +160,30 @@ export function Navbar({
               <span className="hidden xl:inline">{viewMode === 'bpo' ? 'Visão BPO Amici' : 'Portal do Cliente'}</span>
             </button>
 
-            {/* Botão Sincronizar Conta Azul */}
-            <button
-              type="button"
-              onClick={onTriggerSync}
-              disabled={isSyncing}
-              title="Sincronizar dados em tempo real com a Conta Azul"
-              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-md ${
-                isSyncing
-                  ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-800 cursor-wait'
-                  : 'bg-gradient-to-r from-sky-600 via-cyan-600 to-teal-600 hover:from-sky-500 hover:to-teal-500 text-white active:scale-95'
-              }`}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Sync Conta Azul'}</span>
-            </button>
+            {/* Botão Sincronizar ERP (Bling ERP ou Conta Azul) */}
+            {(() => {
+              const isBling = selectedClient?.erpProvider === 'bling' || selectedClient?.division === 'comex' || selectedClient?.tradeName?.toLowerCase().includes('lumens')
+              return (
+                <button
+                  type="button"
+                  onClick={onTriggerSync}
+                  disabled={isSyncing}
+                  title={isBling ? 'Sincronizar dados em tempo real com a API Bling ERP' : 'Sincronizar dados em tempo real com a Conta Azul'}
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-md ${
+                    isSyncing
+                      ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-800 cursor-wait'
+                      : isBling
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white active:scale-95 shadow-emerald-950/20'
+                        : 'bg-gradient-to-r from-sky-600 via-cyan-600 to-teal-600 hover:from-sky-500 hover:to-teal-500 text-white active:scale-95'
+                  }`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">
+                    {isSyncing ? 'Sincronizando...' : (isBling ? 'Sync Bling ERP' : 'Sync Conta Azul')}
+                  </span>
+                </button>
+              )
+            })()}
 
             {/* Perfil do Usuário e Botão de Logout */}
             <div className={`flex items-center gap-1.5 sm:gap-2 pl-1.5 sm:pl-3 border-l ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>

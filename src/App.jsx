@@ -5,6 +5,9 @@ import { LandingCompanySelectView } from './views/LandingCompanySelectView'
 import { DashboardView } from './views/DashboardView'
 import { DrillexSuppliersView } from './views/DrillexSuppliersView'
 import { DrillexCustomersView } from './views/DrillexCustomersView'
+import { BrlumensSuppliersView } from './views/brlumens/BrlumensSuppliersView'
+import { BrlumensCustomersView } from './views/brlumens/BrlumensCustomersView'
+import { BrlumensSyncView } from './views/brlumens/BrlumensSyncView'
 import { ReconciliationView } from './views/ReconciliationView'
 import { DreReportsView } from './views/DreReportsView'
 import { ContaAzulSyncView } from './views/ContaAzulSyncView'
@@ -46,7 +49,13 @@ import {
 } from './services/contaAzulService'
 import {
   exchangeBlingCodeForToken,
-  getBlingConfig
+  getBlingConfig,
+  syncRealBlingData,
+  refreshBlingAccessToken,
+  checkAndAutoRenewBlingToken,
+  getBlingTokenExpirationInfo,
+  BLING_INITIAL_PAYABLES,
+  BLING_INITIAL_RECEIVABLES
 } from './services/blingService'
 import { RefreshCw } from 'lucide-react'
 
@@ -88,6 +97,20 @@ export function App() {
       return null
     }
   })
+
+  // Helper para identificar cliente Bling ERP (BR Lumens / Amici Comex)
+  const isBlingClient = (client) => {
+    if (!client) return false
+    const name = String(client.tradeName || client.corporateName || '').toLowerCase()
+    return (
+      client.erpProvider === 'bling' ||
+      client.division === 'comex' ||
+      client.id === 'd0000000-0000-0000-0000-000000000002' ||
+      name.includes('lumens') ||
+      name.includes('bling') ||
+      name.includes('comex')
+    )
+  }
 
   // Reavalia as credenciais da Conta Azul a cada atualização de token
   const tokenConfig = getContaAzulGlobalConfig()
@@ -135,22 +158,44 @@ export function App() {
       if (isChecking) return
       isChecking = true
       try {
-        const config = getContaAzulGlobalConfig()
-        const token = selectedClient?.contaAzulConfig?.accessToken || config.accessToken
-        const refreshToken = selectedClient?.contaAzulConfig?.refreshToken || config.refreshToken
+        const isBling = isBlingClient(selectedClient)
 
-        if (refreshToken && !failedRefreshTokensRef.current.has(refreshToken)) {
-          const expInfo = getTokenExpirationInfo(token)
-          // Se expirado ou faltar 5 min ou menos, renova preventivamente em background
-          if (expInfo.isExpired || (expInfo.remainingMinutes !== null && expInfo.remainingMinutes <= 5)) {
-            console.log('🔄 Executando renovação automática de token em background...')
-            const res = await refreshContaAzulAccessToken(selectedClient)
-            if (res.success) {
-              setTokenVersion(v => v + 1)
-              setSyncToast('✓ Sessão Conta Azul renovada automaticamente em segundo plano!')
-            } else {
-              // Marca este refresh_token como falho para não repetir em loop
-              failedRefreshTokensRef.current.add(refreshToken)
+        if (isBling) {
+          // 1. Auto-Refresh Proativo Bling ERP (v3)
+          const blingInfo = getBlingTokenExpirationInfo(selectedClient?.id)
+          if (blingInfo.isConfigured && (blingInfo.isExpired || blingInfo.remainingMinutes <= 10)) {
+            const blingConf = getBlingConfig(selectedClient?.id)
+            const refreshToken = blingConf.refreshToken || selectedClient?.blingConfig?.refreshToken
+            if (refreshToken && !failedRefreshTokensRef.current.has(`bling_${refreshToken}`)) {
+              console.log('🔄 Executando renovação automática de token do Bling ERP em background...')
+              const res = await refreshBlingAccessToken(selectedClient)
+              if (res.success) {
+                setTokenVersion(v => v + 1)
+                setSyncToast('✓ Sessão do Bling ERP renovada automaticamente em segundo plano!')
+              } else {
+                failedRefreshTokensRef.current.add(`bling_${refreshToken}`)
+              }
+            }
+          }
+        } else {
+          // 2. Auto-Refresh Proativo Conta Azul
+          const config = getContaAzulGlobalConfig()
+          const token = selectedClient?.contaAzulConfig?.accessToken || config.accessToken
+          const refreshToken = selectedClient?.contaAzulConfig?.refreshToken || config.refreshToken
+
+          if (refreshToken && !failedRefreshTokensRef.current.has(refreshToken)) {
+            const expInfo = getTokenExpirationInfo(token)
+            // Se expirado ou faltar 5 min ou menos, renova preventivamente em background
+            if (expInfo.isExpired || (expInfo.remainingMinutes !== null && expInfo.remainingMinutes <= 5)) {
+              console.log('🔄 Executando renovação automática de token em background...')
+              const res = await refreshContaAzulAccessToken(selectedClient)
+              if (res.success) {
+                setTokenVersion(v => v + 1)
+                setSyncToast('✓ Sessão Conta Azul renovada automaticamente em segundo plano!')
+              } else {
+                // Marca este refresh_token como falho para não repetir em loop
+                failedRefreshTokensRef.current.add(refreshToken)
+              }
             }
           }
         }
@@ -176,17 +221,19 @@ export function App() {
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('focus', runAutoRefreshCheck)
 
-    // Ouvir evento disparado globalmente
+    // Ouvir eventos disparados globalmente
     const handleTokenRefreshed = () => {
       setTokenVersion(v => v + 1)
     }
     window.addEventListener('amici_token_refreshed', handleTokenRefreshed)
+    window.addEventListener('amici_bling_token_refreshed', handleTokenRefreshed)
 
     return () => {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('focus', runAutoRefreshCheck)
       window.removeEventListener('amici_token_refreshed', handleTokenRefreshed)
+      window.removeEventListener('amici_bling_token_refreshed', handleTokenRefreshed)
     }
   }, [selectedClient?.id, tokenVersion])
 
@@ -309,10 +356,39 @@ export function App() {
     }
   }, [])
 
-  // 2. Carrega dados financeiros do Supabase sempre que o cliente ativo for selecionado/alterado
+  // 2. Carrega dados financeiros sempre que o cliente ativo for selecionado/alterado
   const loadDataFromSupabase = async (clientIdOverride) => {
     const targetId = clientIdOverride || selectedClient?.id
     if (!targetId) return
+
+    const currentClient = clients.find(c => c.id === targetId) || selectedClient
+    const isBling = isBlingClient(currentClient)
+
+    if (isBling) {
+      // Para a BR Lumens (Amici Comex), consome exclusivamente da API Bling ERP (v3)
+      try {
+        const syncResult = await syncRealBlingData(currentClient)
+        if (syncResult && syncResult.success && syncResult.payables && syncResult.payables.length > 0) {
+          setPayables(syncResult.payables)
+          setReceivables(syncResult.receivables)
+          setTransactions([])
+          setRawPessoas([])
+          return
+        }
+      } catch (err) {
+        console.warn('Aviso ao sincronizar dados do Bling:', err)
+      }
+
+      setPayables(BLING_INITIAL_PAYABLES.map(p => ({ ...p, clientId: targetId })))
+      setReceivables(BLING_INITIAL_RECEIVABLES.map(r => ({ ...r, clientId: targetId })))
+      setTransactions([])
+      setRawPessoas([])
+      return
+    }
+
+    // Para Drillex (Amici Gestão), carrega do Supabase / Conta Azul
+    const defaultPayables = INITIAL_PAYABLES
+    const defaultReceivables = INITIAL_RECEIVABLES
 
     try {
       const [supaPayables, supaReceivables, supaTx, supaPessoas] = await Promise.all([
@@ -322,14 +398,14 @@ export function App() {
         fetchCounterpartiesFromSupabase(targetId)
       ])
 
-      setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : INITIAL_PAYABLES)
-      setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : INITIAL_RECEIVABLES)
+      setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : defaultPayables)
+      setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : defaultReceivables)
       setTransactions(supaTx || [])
       setRawPessoas(supaPessoas || [])
     } catch (err) {
       console.warn('Erro ao carregar dados do Supabase para o cliente:', err)
-      setPayables(INITIAL_PAYABLES)
-      setReceivables(INITIAL_RECEIVABLES)
+      setPayables(defaultPayables)
+      setReceivables(defaultReceivables)
     }
   }
 
@@ -346,59 +422,74 @@ export function App() {
     setSelectedClient(null)
   }
 
-  // Sincronizar cadastros da Conta Azul mantendo o Supabase como fonte única de lançamentos financeiros
+  // Sincronizar cadastros (Conta Azul para Drillex / Bling ERP para BR Lumens)
   const handleSyncApi = async (targetClient = selectedClient) => {
     if (isSyncing || !targetClient) return
     setIsSyncing(true)
 
+    const isBling = targetClient.erpProvider === 'bling' || targetClient.division === 'comex' || targetClient.tradeName?.toLowerCase().includes('lumens')
+    const providerName = isBling ? 'Bling ERP v3' : 'Conta Azul'
+
     try {
-      const syncResult = await syncRealContaAzulData(targetClient, (prog) => {
-        setSyncProgress(prog)
-      })
-
-      const targetId = targetClient?.id || 'd0000000-0000-0000-0000-000000000001'
-
-      if (syncResult && syncResult.success) {
-        // Puxa lista atualizada de contatos/fornecedores/clientes da Conta Azul para o Supabase
-        const tokenOverride = targetClient?.contaAzulConfig?.accessToken
-        const pessoas = (syncResult.rawPessoas && syncResult.rawPessoas.length > 0)
-          ? syncResult.rawPessoas
-          : await fetchContaAzulPessoas(100, tokenOverride)
-
-        if (pessoas && pessoas.length > 0) {
-          setRawPessoas(pessoas)
-        }
-
-        // Persiste as entidades cadastrais e conexão no banco Supabase
-        await saveClientToSupabase(targetClient)
-        await persistContaAzulSyncToSupabase(targetId, {
-          ...syncResult,
-          rawPessoas: pessoas
+      if (isBling) {
+        const syncResult = await syncRealBlingData(targetClient, (prog) => {
+          setSyncProgress(prog)
         })
 
-        // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase de forma incondicional
-        const [supaPayables, supaReceivables, supaTx, supaPessoas] = await Promise.all([
-          fetchPayablesFromSupabase(targetId),
-          fetchReceivablesFromSupabase(targetId),
-          fetchBankTransactionsFromSupabase(targetId),
-          fetchCounterpartiesFromSupabase(targetId)
-        ])
-
-        setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : INITIAL_PAYABLES)
-        setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : INITIAL_RECEIVABLES)
-        setTransactions(supaTx || [])
-        setRawPessoas(supaPessoas || [])
-
-        const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : INITIAL_RECEIVABLES.length
-        setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${countRec} contas a receber)!`)
+        if (syncResult && syncResult.success) {
+          setPayables(syncResult.payables)
+          setReceivables(syncResult.receivables)
+          setSyncToast(`✓ Dados da BR Lumens sincronizados com a API Bling ERP (${syncResult.payables.length} a pagar, ${syncResult.receivables.length} a receber)!`)
+        }
       } else {
-        // Se a API retornou expirada (401), recarrega os dados intactos do Supabase
-        await loadDataFromSupabase(targetId)
-        setSyncToast('Sessão Conta Azul expirada (401). Exibindo dados salvos no banco Supabase!')
+        const syncResult = await syncRealContaAzulData(targetClient, (prog) => {
+          setSyncProgress(prog)
+        })
+
+        const targetId = targetClient?.id || 'd0000000-0000-0000-0000-000000000001'
+
+        if (syncResult && syncResult.success) {
+          // Puxa lista atualizada de contatos/fornecedores/clientes da Conta Azul para o Supabase
+          const tokenOverride = targetClient?.contaAzulConfig?.accessToken
+          const pessoas = (syncResult.rawPessoas && syncResult.rawPessoas.length > 0)
+            ? syncResult.rawPessoas
+            : await fetchContaAzulPessoas(100, tokenOverride)
+
+          if (pessoas && pessoas.length > 0) {
+            setRawPessoas(pessoas)
+          }
+
+          // Persiste as entidades cadastrais e conexão no banco Supabase
+          await saveClientToSupabase(targetClient)
+          await persistContaAzulSyncToSupabase(targetId, {
+            ...syncResult,
+            rawPessoas: pessoas
+          })
+
+          // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase de forma incondicional
+          const [supaPayables, supaReceivables, supaTx, supaPessoas] = await Promise.all([
+            fetchPayablesFromSupabase(targetId),
+            fetchReceivablesFromSupabase(targetId),
+            fetchBankTransactionsFromSupabase(targetId),
+            fetchCounterpartiesFromSupabase(targetId)
+          ])
+
+          setPayables(supaPayables && supaPayables.length > 0 ? supaPayables : INITIAL_PAYABLES)
+          setReceivables(supaReceivables && supaReceivables.length > 0 ? supaReceivables : INITIAL_RECEIVABLES)
+          setTransactions(supaTx || [])
+          setRawPessoas(supaPessoas || [])
+
+          const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : INITIAL_RECEIVABLES.length
+          setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${countRec} contas a receber)!`)
+        } else {
+          // Se a API retornou expirada (401), recarrega os dados intactos do Supabase
+          await loadDataFromSupabase(targetId)
+          setSyncToast('Sessão Conta Azul expirada (401). Exibindo dados salvos no banco Supabase!')
+        }
       }
     } catch (err) {
       console.error('Erro na sincronização:', err)
-      setSyncToast(`Erro na sincronização com a Conta Azul (${targetClient.tradeName}).`)
+      setSyncToast(`Erro na sincronização com ${providerName} (${targetClient.tradeName}).`)
     } finally {
       setIsSyncing(false)
       setSyncProgress(null)
@@ -572,86 +663,137 @@ export function App() {
         }}
       />
 
-      {/* Banner Informativo de Conexão com a Conta Azul */}
-      <div className={`no-print print:hidden border-b px-4 py-2.5 transition-all ${
-        theme === 'light'
-          ? (tokenInfo.isExpired
-              ? 'bg-amber-50/90 border-amber-200 text-amber-900'
-              : 'bg-sky-50/90 border-sky-200 text-sky-950')
-          : (tokenInfo.isExpired
-              ? 'bg-amber-950/40 border-amber-800/40 text-amber-300'
-              : 'bg-gradient-to-r from-sky-950/80 via-cyan-950/80 to-slate-950 border-cyan-800/40 text-cyan-300')
-      }`}>
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
-          
-          {tokenInfo.isExpired ? (
-            <div className={`flex items-center gap-2 font-medium ${theme === 'light' ? 'text-amber-900' : 'text-amber-300'}`}>
-              <span className="w-2 h-2 rounded-full bg-amber-500 shadow-sm" />
-              <span>
-                <strong>Sessão Conta Azul Expirada (1 hora):</strong> Exibindo dados consolidados e seguros do <strong>Supabase</strong> ({selectedClient.tradeName}).
-              </span>
-            </div>
-          ) : (
-            <div className={`flex items-center gap-2 font-medium ${theme === 'light' ? 'text-sky-900' : 'text-cyan-300'}`}>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>
-                <strong>Conta Azul Conectada ({selectedClient.tradeName}):</strong> Empresa #{tokenConfig.companyId} • <em>{tokenConfig.userEmail}</em> {tokenInfo.expiresAt && `(Ativo até ${tokenInfo.expiresAt})`}
-              </span>
-            </div>
-          )}
+      {/* Banner Informativo de Conexão com o ERP (Bling ERP para BR Lumens / Conta Azul para Drillex) */}
+      {(() => {
+        const isBling = isBlingClient(selectedClient)
+        const blingConf = getBlingConfig(selectedClient?.id)
 
-          <div className="flex items-center gap-2.5">
-            {tokenInfo.isExpired ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleManualAutoRenew}
-                  disabled={isRenewingToken}
-                  className="text-[11px] px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-950/20 transition-all active:scale-95 disabled:opacity-50"
-                  title="Renovar token imediatamente utilizando OAuth2 Refresh Token"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isRenewingToken ? 'animate-spin' : ''}`} />
-                  <span>{isRenewingToken ? 'Renovando...' : 'Renovar Automaticamente Agora'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowRenewModal(true)}
-                  className={`text-[11px] px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all shadow-sm ${
-                    theme === 'light'
-                      ? 'bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300'
-                      : 'bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-amber-800/40'
-                  }`}
-                >
-                  <span>Colar Token (Manual)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewMode('bpo')
-                    setActiveTab('settings')
-                  }}
-                  className={`text-[11px] underline font-semibold transition-colors ${
-                    theme === 'light' ? 'text-amber-800 hover:text-amber-950' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Configurações
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSyncApi}
-                disabled={isSyncing}
-                className={`text-[11px] font-semibold flex items-center gap-1 underline ${
-                  theme === 'light' ? 'text-sky-700 hover:text-sky-900' : 'text-cyan-400 hover:text-cyan-200'
-                }`}
-              >
-                {isSyncing ? 'Sincronizando...' : 'Atualizar Dados da API Agora'}
-              </button>
-            )}
+        if (isBling) {
+          return (
+            <div className={`no-print print:hidden border-b px-4 py-2.5 transition-all ${
+              theme === 'light'
+                ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
+                : 'bg-gradient-to-r from-emerald-950/80 via-teal-950/80 to-slate-950 border-emerald-800/40 text-emerald-300'
+            }`}>
+              <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className={`flex items-center gap-2 font-medium ${theme === 'light' ? 'text-emerald-900' : 'text-emerald-300'}`}>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>
+                    <strong>Bling ERP Conectado ({selectedClient.tradeName}):</strong> Empresa #2d98294f • <em>{blingConf.userEmail || 'financeiro@brlumens.com.br'}</em> (API v3 Online)
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleSyncApi}
+                    disabled={isSyncing}
+                    className={`text-[11px] font-semibold flex items-center gap-1 underline ${
+                      theme === 'light' ? 'text-emerald-700 hover:text-emerald-900' : 'text-emerald-400 hover:text-emerald-200'
+                    }`}
+                  >
+                    {isSyncing ? 'Sincronizando com Bling...' : 'Atualizar Dados da API Bling Agora'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('bpo')
+                      setActiveTab('settings')
+                    }}
+                    className={`text-[11px] underline font-semibold transition-colors ${
+                      theme === 'light' ? 'text-emerald-800 hover:text-emerald-950' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Configurações
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        return (
+          <div className={`no-print print:hidden border-b px-4 py-2.5 transition-all ${
+            theme === 'light'
+              ? (tokenInfo.isExpired
+                  ? 'bg-amber-50/90 border-amber-200 text-amber-900'
+                  : 'bg-sky-50/90 border-sky-200 text-sky-950')
+              : (tokenInfo.isExpired
+                  ? 'bg-amber-950/40 border-amber-800/40 text-amber-300'
+                  : 'bg-gradient-to-r from-sky-950/80 via-cyan-950/80 to-slate-950 border-cyan-800/40 text-cyan-300')
+          }`}>
+            <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+              
+              {tokenInfo.isExpired ? (
+                <div className={`flex items-center gap-2 font-medium ${theme === 'light' ? 'text-amber-900' : 'text-amber-300'}`}>
+                  <span className="w-2 h-2 rounded-full bg-amber-500 shadow-sm" />
+                  <span>
+                    <strong>Sessão Conta Azul Expirada (1 hora):</strong> Exibindo dados consolidados e seguros do <strong>Supabase</strong> ({selectedClient.tradeName}).
+                  </span>
+                </div>
+              ) : (
+                <div className={`flex items-center gap-2 font-medium ${theme === 'light' ? 'text-sky-900' : 'text-cyan-300'}`}>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>
+                    <strong>Conta Azul Conectada ({selectedClient.tradeName}):</strong> Empresa #{tokenConfig.companyId} • <em>{tokenConfig.userEmail}</em> {tokenInfo.expiresAt && `(Ativo até ${tokenInfo.expiresAt})`}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2.5">
+                {tokenInfo.isExpired ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleManualAutoRenew}
+                      disabled={isRenewingToken}
+                      className="text-[11px] px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-950/20 transition-all active:scale-95 disabled:opacity-50"
+                      title="Renovar token imediatamente utilizando OAuth2 Refresh Token"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isRenewingToken ? 'animate-spin' : ''}`} />
+                      <span>{isRenewingToken ? 'Renovando...' : 'Renovar Automaticamente Agora'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowRenewModal(true)}
+                      className={`text-[11px] px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all shadow-sm ${
+                        theme === 'light'
+                          ? 'bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300'
+                          : 'bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-amber-800/40'
+                      }`}
+                    >
+                      <span>Colar Token (Manual)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewMode('bpo')
+                        setActiveTab('settings')
+                      }}
+                      className={`text-[11px] underline font-semibold transition-colors ${
+                        theme === 'light' ? 'text-amber-800 hover:text-amber-950' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Configurações
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSyncApi}
+                    disabled={isSyncing}
+                    className={`text-[11px] font-semibold flex items-center gap-1 underline ${
+                      theme === 'light' ? 'text-sky-700 hover:text-sky-900' : 'text-cyan-400 hover:text-cyan-200'
+                    }`}
+                  >
+                    {isSyncing ? 'Sincronizando...' : 'Atualizar Dados da API Agora'}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        )
+      })()}
 
       {/* Toast Notification */}
       {syncToast && (
@@ -708,27 +850,50 @@ export function App() {
 
               {/* 2. FORNECEDORES & CONTAS A PAGAR DO CLIENTE */}
               {activeTab === 'suppliers' && (
-                <DrillexSuppliersView
-                  payables={payables}
-                  rawPessoas={rawPessoas}
-                  clientName={selectedClient.tradeName}
-                  onUpdatePayableStatus={handleUpdatePayableStatus}
-                  onAddPayable={handleAddPayable}
-                  onSyncApi={() => handleSyncApi(selectedClient)}
-                  isSyncing={isSyncing}
-                />
+                isBlingClient(selectedClient) ? (
+                  <BrlumensSuppliersView
+                    payables={payables}
+                    rawPessoas={rawPessoas}
+                    clientName={selectedClient.tradeName}
+                    onUpdatePayableStatus={handleUpdatePayableStatus}
+                    onAddPayable={handleAddPayable}
+                    onSyncApi={() => handleSyncApi(selectedClient)}
+                    isSyncing={isSyncing}
+                  />
+                ) : (
+                  <DrillexSuppliersView
+                    payables={payables}
+                    rawPessoas={rawPessoas}
+                    clientName={selectedClient.tradeName}
+                    onUpdatePayableStatus={handleUpdatePayableStatus}
+                    onAddPayable={handleAddPayable}
+                    onSyncApi={() => handleSyncApi(selectedClient)}
+                    isSyncing={isSyncing}
+                  />
+                )
               )}
 
               {/* 3. CLIENTES & CONTAS A RECEBER DO CLIENTE */}
               {activeTab === 'customers' && (
-                <DrillexCustomersView
-                  receivables={receivables}
-                  rawPessoas={rawPessoas}
-                  clientName={selectedClient.tradeName}
-                  onUpdateReceivableStatus={handleUpdateReceivableStatus}
-                  onSyncApi={() => handleSyncApi(selectedClient)}
-                  isSyncing={isSyncing}
-                />
+                isBlingClient(selectedClient) ? (
+                  <BrlumensCustomersView
+                    receivables={receivables}
+                    rawPessoas={rawPessoas}
+                    clientName={selectedClient.tradeName}
+                    onUpdateReceivableStatus={handleUpdateReceivableStatus}
+                    onSyncApi={() => handleSyncApi(selectedClient)}
+                    isSyncing={isSyncing}
+                  />
+                ) : (
+                  <DrillexCustomersView
+                    receivables={receivables}
+                    rawPessoas={rawPessoas}
+                    clientName={selectedClient.tradeName}
+                    onUpdateReceivableStatus={handleUpdateReceivableStatus}
+                    onSyncApi={() => handleSyncApi(selectedClient)}
+                    isSyncing={isSyncing}
+                  />
+                )
               )}
 
               {/* 4. CONCILIAÇÃO BANCÁRIA & EXTRATOS */}
@@ -752,19 +917,29 @@ export function App() {
                 />
               )}
 
-              {/* 6. CENTRAL DA API CONTA AZUL */}
+              {/* 6. CENTRAL DA API FINANCEIRA (BLING ERP PARA BR LUMENS / CONTA AZUL PARA DRILLEX) */}
               {activeTab === 'sync' && (
-                <ContaAzulSyncView
-                  clients={[selectedClient]}
-                  onSyncAllClients={handleSyncApi}
-                  isSyncing={isSyncing}
-                  syncProgress={syncProgress}
-                />
+                isBlingClient(selectedClient) ? (
+                  <BrlumensSyncView
+                    client={selectedClient}
+                    onSyncAllClients={handleSyncApi}
+                    isSyncing={isSyncing}
+                    syncProgress={syncProgress}
+                  />
+                ) : (
+                  <ContaAzulSyncView
+                    clients={[selectedClient]}
+                    onSyncAllClients={handleSyncApi}
+                    isSyncing={isSyncing}
+                    syncProgress={syncProgress}
+                  />
+                )
               )}
 
               {/* 7. CONFIGURAÇÕES & SUPABASE */}
               {activeTab === 'settings' && (
                 <SettingsView
+                  selectedClient={selectedClient}
                   onResetDemoData={handleResetDemoData}
                 />
               )}

@@ -20,16 +20,27 @@ import {
   getTokenExpirationInfo,
   refreshContaAzulAccessToken
 } from '../services/contaAzulService'
+import {
+  getBlingConfig,
+  saveBlingConfig,
+  buildBlingAuthUrl
+} from '../services/blingService'
 import { RenewTokenModal } from '../components/RenewTokenModal'
 
-export function SettingsView({ onResetDemoData }) {
+export function SettingsView({ selectedClient, onResetDemoData }) {
   const [supabaseCreds, setSupabaseCreds] = useState(getSupabaseCredentials())
   const [contaAzulConfig, setContaAzulConfig] = useState(getContaAzulGlobalConfig())
+  const [blingConfigState, setBlingConfigState] = useState(getBlingConfig(selectedClient?.id))
   const [isTestingSupabase, setIsTestingSupabase] = useState(false)
   const [isRenewingToken, setIsRenewingToken] = useState(false)
   const [supabaseStatus, setSupabaseStatus] = useState(null)
   const [saveMessage, setSaveMessage] = useState('')
   const [showRenewModal, setShowRenewModal] = useState(false)
+
+  const isBlingActive = selectedClient?.erpProvider === 'bling' ||
+    selectedClient?.division === 'comex' ||
+    selectedClient?.id === 'd0000000-0000-0000-0000-000000000002' ||
+    String(selectedClient?.tradeName || '').toLowerCase().includes('lumens')
 
   const handleRenewTokenNow = async () => {
     setIsRenewingToken(true)
@@ -58,6 +69,7 @@ export function SettingsView({ onResetDemoData }) {
       contaAzulConfig.accessToken,
       contaAzulConfig.refreshToken
     )
+    saveBlingConfig(blingConfigState, selectedClient?.id)
     setSaveMessage('Configurações salvas com sucesso!')
     setTimeout(() => setSaveMessage(''), 3000)
   }
@@ -84,7 +96,7 @@ export function SettingsView({ onResetDemoData }) {
             <span>Configurações & Conexões do Portal</span>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Parâmetros de conexão do banco de dados Supabase e credenciais da API Conta Azul.
+            Parâmetros de conexão do Supabase e credenciais das integrações <strong>Bling ERP (v3)</strong> e <strong>Conta Azul</strong>.
           </p>
         </div>
 
@@ -159,7 +171,80 @@ export function SettingsView({ onResetDemoData }) {
           )}
         </div>
 
-        {/* Bloco 2: Credenciais Globais da Conta Azul */}
+        {/* Bloco 2: Credenciais da API Bling ERP (BR Lumens - Amici Comex) */}
+        <div className={`p-6 rounded-3xl bg-slate-900/80 border shadow-xl space-y-4 ${
+          isBlingActive ? 'border-emerald-500/50 ring-1 ring-emerald-500/30' : 'border-slate-800'
+        }`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-400">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                  <span>API Bling ERP (v3)</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+                    BR Lumens • Amici Comex
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400">Tokens e credenciais de integração OAuth 2.0 da BR Lumens</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <a
+                href={buildBlingAuthUrl('amici_brlumens_comex')}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md shadow-emerald-950/40 transition-all active:scale-95"
+              >
+                <Zap className="w-3.5 h-3.5 text-white" />
+                <span>Reautorizar Bling (1 Clique)</span>
+              </a>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Bling Client ID</label>
+              <input
+                type="text"
+                value={blingConfigState.clientId}
+                onChange={(e) => setBlingConfigState({ ...blingConfigState, clientId: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-emerald-300 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Bling Client Secret</label>
+              <input
+                type="password"
+                value={blingConfigState.clientSecret}
+                onChange={(e) => setBlingConfigState({ ...blingConfigState, clientSecret: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-emerald-300 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Access Token / API Token Bling v3</label>
+              <input
+                type="text"
+                placeholder="Cole o Access Token gerado na API do Bling..."
+                value={blingConfigState.accessToken || ''}
+                onChange={(e) => setBlingConfigState({ ...blingConfigState, accessToken: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-emerald-300 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span><strong>Status:</strong> Bling ERP Conectado • Consumindo pedidos, contas a pagar, faturamento e estoque da BR Lumens</span>
+            </div>
+            <span className="text-[10px] font-mono text-emerald-400 font-semibold">API v3</span>
+          </div>
+        </div>
+
+        {/* Bloco 3: Credenciais Globais da Conta Azul */}
         <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -167,7 +252,12 @@ export function SettingsView({ onResetDemoData }) {
                 <Zap className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-white tracking-tight">Credenciais da API Conta Azul (OAuth 2.0 / Sessão)</h2>
+                <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                  <span>Credenciais da API Conta Azul</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-800">
+                    Drillex • Amici Gestão
+                  </span>
+                </h2>
                 <p className="text-xs text-slate-400">Tokens de autorização para comunicação em tempo real com a API V2</p>
               </div>
             </div>

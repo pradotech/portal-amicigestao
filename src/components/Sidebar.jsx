@@ -107,14 +107,18 @@ export function Sidebar({
             </button>
           </div>
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-600 to-sky-700 text-white font-bold flex items-center justify-center text-sm shadow-md shadow-cyan-950/20 flex-shrink-0">
+            <div className={`w-9 h-9 rounded-xl ${
+              String(clientName).toLowerCase().includes('lumens')
+                ? 'bg-gradient-to-br from-emerald-600 to-teal-700'
+                : 'bg-gradient-to-br from-cyan-600 to-sky-700'
+            } text-white font-bold flex items-center justify-center text-sm shadow-md shadow-cyan-950/20 flex-shrink-0`}>
               {clientName.charAt(0)}
             </div>
             <div className="truncate min-w-0">
               <div className={`font-bold text-sm truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>{clientName}</div>
               <div className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Conta Azul Ativa</span>
+                <span>{String(clientName).toLowerCase().includes('lumens') ? 'Bling ERP Ativo' : 'Conta Azul Ativa'}</span>
               </div>
             </div>
           </div>
@@ -185,10 +189,12 @@ export function Sidebar({
         }`}>
           <div className={`flex items-center gap-2 font-semibold mb-1 ${isLight ? 'text-sky-800' : 'text-cyan-400'}`}>
             <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Rotina BPO Amici</span>
+            <span>{String(clientName).toLowerCase().includes('lumens') ? 'Rotina Amici Comex' : 'Rotina BPO Amici'}</span>
           </div>
           <p className={`text-[11px] leading-relaxed ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-            Conciliação bancária diária do banco C6 e conferência dos pagamentos da Drillex.
+            {String(clientName).toLowerCase().includes('lumens')
+              ? 'Gestão de importação, câmbio e conciliação de faturamento da BR Lumens via Bling ERP.'
+              : 'Conciliação bancária diária do banco C6 e conferência dos pagamentos da Drillex.'}
           </p>
         </div>
 
