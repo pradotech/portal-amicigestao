@@ -87,7 +87,7 @@ export function BrlumensCustomersView({
     (acc, item) => {
       const val = Number(item.amount || 0)
       const due = item.dueDate || ''
-      const isPaid = item.status === 'paid'
+      const isPaid = item.status === 'paid' || item.status === 'received'
 
       acc.totalPeriod += val
 
@@ -361,17 +361,17 @@ export function BrlumensCustomersView({
                         </td>
                         <td className="p-3.5 text-center">
                           <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
-                            item.status === 'paid'
+                            item.status === 'paid' || item.status === 'received'
                               ? 'bg-teal-950 text-teal-300 border-teal-800'
                               : isOverdue
                               ? 'bg-rose-950 text-rose-300 border-rose-800'
                               : 'bg-emerald-950 text-emerald-300 border-emerald-800'
                           }`}>
-                            {item.status === 'paid' ? 'Recebido' : isOverdue ? 'Vencido' : 'Em Aberto'}
+                            {item.status === 'paid' || item.status === 'received' ? 'Recebido' : isOverdue ? 'Vencido' : 'Em Aberto'}
                           </span>
                         </td>
                         <td className="p-3.5 text-center">
-                          {item.status !== 'paid' && onUpdateReceivableStatus && (
+                          {item.status !== 'paid' && item.status !== 'received' && onUpdateReceivableStatus && (
                             <button
                               type="button"
                               onClick={() => onUpdateReceivableStatus(item.id, 'paid')}

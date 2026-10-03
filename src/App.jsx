@@ -416,24 +416,31 @@ export function App() {
   }
 
   // Sincronizar cadastros (Conta Azul para Drillex / Bling ERP para BR Lumens)
-  const handleSyncApi = async (targetClient = selectedClient) => {
-    if (isSyncing || !targetClient) return
+  const handleSyncApi = async (targetClient) => {
+    // Validação estrita: previne que SyntheticEvent do React seja tratado como objeto de cliente
+    const isSyntheticEvent = targetClient && (targetClient.nativeEvent || targetClient.target || targetClient.type)
+    const effectiveClient = (!isSyntheticEvent && targetClient && (targetClient.id || targetClient.tradeName || targetClient.erpProvider))
+      ? targetClient
+      : selectedClient
+
+    if (isSyncing || !effectiveClient) return
     setIsSyncing(true)
 
-    const isBling = targetClient.erpProvider === 'bling' || targetClient.division === 'comex' || targetClient.tradeName?.toLowerCase().includes('lumens')
+    const isBling = isBlingClient(effectiveClient)
     const providerName = isBling ? 'Bling ERP v3' : 'Conta Azul'
 
     try {
-      const targetId = targetClient?.id || (isBling ? 'd0000000-0000-0000-0000-000000000002' : 'd0000000-0000-0000-0000-000000000001')
+      const targetId = effectiveClient?.id || (isBling ? 'd0000000-0000-0000-0000-000000000002' : 'd0000000-0000-0000-0000-000000000001')
 
       if (isBling) {
-        const syncResult = await syncRealBlingData(targetClient, (prog) => {
+        console.log('🚀 Iniciando sincronização EXCLUSIVA do Bling ERP (BR Lumens)...', effectiveClient)
+        const syncResult = await syncRealBlingData(effectiveClient, (prog) => {
           setSyncProgress(prog)
         })
 
         if (syncResult && syncResult.success) {
           // Persiste as entidades cadastrais e conexão no banco Supabase
-          await saveClientToSupabase(targetClient)
+          await saveClientToSupabase(effectiveClient)
           await persistBlingSyncToSupabase(targetId, syncResult)
 
           // Recarrega todos os dados financeiros DIRETAMENTE do banco de dados Supabase de forma incondicional
@@ -458,13 +465,14 @@ export function App() {
           setSyncToast('Sessão Bling expirada ou indisponível. Exibindo dados salvos no banco Supabase!')
         }
       } else {
-        const syncResult = await syncRealContaAzulData(targetClient, (prog) => {
+        console.log('🚀 Iniciando sincronização da Conta Azul (Drillex)...', effectiveClient)
+        const syncResult = await syncRealContaAzulData(effectiveClient, (prog) => {
           setSyncProgress(prog)
         })
 
         if (syncResult && syncResult.success) {
           // Puxa lista atualizada de contatos/fornecedores/clientes da Conta Azul para o Supabase
-          const tokenOverride = targetClient?.contaAzulConfig?.accessToken
+          const tokenOverride = effectiveClient?.contaAzulConfig?.accessToken
           const pessoas = (syncResult.rawPessoas && syncResult.rawPessoas.length > 0)
             ? syncResult.rawPessoas
             : await fetchContaAzulPessoas(100, tokenOverride)
@@ -474,7 +482,7 @@ export function App() {
           }
 
           // Persiste as entidades cadastrais e conexão no banco Supabase
-          await saveClientToSupabase(targetClient)
+          await saveClientToSupabase(effectiveClient)
           await persistContaAzulSyncToSupabase(targetId, {
             ...syncResult,
             rawPessoas: pessoas
@@ -493,8 +501,8 @@ export function App() {
           setTransactions(supaTx || [])
           setRawPessoas(supaPessoas || [])
 
-          const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : [].length
-          setSyncToast(`✓ Dados de ${targetClient.tradeName} sincronizados com a Conta Azul (${countRec} contas a receber)!`)
+          const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : 0
+          setSyncToast(`✓ Dados de ${effectiveClient.tradeName} sincronizados com a Conta Azul (${countRec} contas a receber)!`)
         } else {
           // Se a API retornou expirada (401), recarrega os dados intactos do Supabase
           await loadDataFromSupabase(targetId)
@@ -503,7 +511,7 @@ export function App() {
       }
     } catch (err) {
       console.error('Erro na sincronização:', err)
-      setSyncToast(`Erro na sincronização com ${providerName} (${targetClient.tradeName}).`)
+      setSyncToast(`Erro na sincronização com ${providerName} (${effectiveClient?.tradeName || 'cliente'}).`)
     } finally {
       setIsSyncing(false)
       setSyncProgress(null)
@@ -700,7 +708,7 @@ export function App() {
                 <div className="flex items-center gap-2.5">
                   <button
                     type="button"
-                    onClick={handleSyncApi}
+                    onClick={() => handleSyncApi(selectedClient)}
                     disabled={isSyncing}
                     className={`text-[11px] font-semibold flex items-center gap-1 underline ${
                       theme === 'light' ? 'text-emerald-700 hover:text-emerald-900' : 'text-emerald-400 hover:text-emerald-200'
@@ -794,7 +802,7 @@ export function App() {
                 ) : (
                   <button
                     type="button"
-                    onClick={handleSyncApi}
+                    onClick={() => handleSyncApi(selectedClient)}
                     disabled={isSyncing}
                     className={`text-[11px] font-semibold flex items-center gap-1 underline ${
                       theme === 'light' ? 'text-sky-700 hover:text-sky-900' : 'text-cyan-400 hover:text-cyan-200'
@@ -947,14 +955,14 @@ export function App() {
                 isBlingClient(selectedClient) ? (
                   <BrlumensSyncView
                     client={selectedClient}
-                    onSyncAllClients={handleSyncApi}
+                    onSyncAllClients={() => handleSyncApi(selectedClient)}
                     isSyncing={isSyncing}
                     syncProgress={syncProgress}
                   />
                 ) : (
                   <ContaAzulSyncView
                     clients={[selectedClient]}
-                    onSyncAllClients={handleSyncApi}
+                    onSyncAllClients={() => handleSyncApi(selectedClient)}
                     isSyncing={isSyncing}
                     syncProgress={syncProgress}
                   />

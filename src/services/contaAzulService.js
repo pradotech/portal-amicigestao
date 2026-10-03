@@ -280,28 +280,27 @@ export async function fetchAllRecentContaAzulVendas(tokenOverride) {
   const vendasParaDetalhar = allVendasList.filter(v => {
     if (!v || !v.id) return false
     return !v.condicao_pagamento && !v.parcelas && !v.parcelas_financeiras
-  }).slice(0, 30) // Limite de 30 para performance e não estourar rate-limit
+  }).slice(0, 15) // Limite de 15 para não estourar rate limit da Conta Azul
 
   if (vendasParaDetalhar.length > 0) {
     const detailedVendasMap = new Map()
-    const CHUNK_SIZE = 5
-    for (let i = 0; i < vendasParaDetalhar.length; i += CHUNK_SIZE) {
-      const chunk = vendasParaDetalhar.slice(i, i + CHUNK_SIZE)
-      const details = await Promise.all(
-        chunk.map(async (v) => {
-          try {
-            const res = await fetchContaAzulApi(`/v1/venda/${v.id}`, tokenOverride)
-            if (res.ok) {
-              const data = await res.json()
-              return { id: v.id, ...v, ...(data.venda || data), cliente: data.cliente || v.cliente }
-            }
-          } catch {}
-          return v
-        })
-      )
-      details.forEach(d => {
-        if (d && d.id) detailedVendasMap.set(String(d.id), d)
-      })
+    let hitRateLimit = false
+
+    for (const v of vendasParaDetalhar) {
+      if (hitRateLimit) break
+      try {
+        const res = await fetchContaAzulApi(`/v1/venda/${v.id}`, tokenOverride)
+        if (res.ok) {
+          const data = await res.json()
+          detailedVendasMap.set(String(v.id), { id: v.id, ...v, ...(data.venda || data), cliente: data.cliente || v.cliente })
+        } else if (res.status === 429) {
+          console.warn('[Conta Azul] Rate limit atingido (429) no detalhamento de vendas. Mantendo dados das listagens.')
+          hitRateLimit = true
+          break
+        }
+      } catch {}
+      // Pequeno intervalo entre requisições de detalhe
+      await new Promise(r => setTimeout(r, 80))
     }
     return allVendasList.map(v => (v.id && detailedVendasMap.get(String(v.id))) || v)
   }
