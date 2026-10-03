@@ -81,6 +81,9 @@ export function App() {
   const [syncProgress, setSyncProgress] = useState(null)
   const [syncToast, setSyncToast] = useState(null)
   const failedRefreshTokensRef = useRef(new Set())
+  const selectedClientRef = useRef(selectedClient)
+  const isSyncingRef = useRef(isSyncing)
+  const handleSyncApiRef = useRef(null)
 
   // Status Supabase & Usuário Conectado
   const [supabaseConfigured, setSupabaseConfigured] = useState(false)
@@ -518,6 +521,38 @@ export function App() {
       setTimeout(() => setSyncToast(null), 4000)
     }
   }
+
+  // Mantém refs atualizados para evitar closures obsoletas no setInterval
+  useEffect(() => {
+    selectedClientRef.current = selectedClient
+  }, [selectedClient])
+
+  useEffect(() => {
+    isSyncingRef.current = isSyncing
+  }, [isSyncing])
+
+  useEffect(() => {
+    handleSyncApiRef.current = handleSyncApi
+  })
+
+  // Sincronização automática em segundo plano a cada 5 minutos para o cliente ativo
+  useEffect(() => {
+    if (!selectedClient?.id) return
+
+    const FIVE_MINUTES_MS = 5 * 60 * 1000 // 5 minutos (300.000 ms)
+
+    const intervalId = setInterval(() => {
+      const currentClient = selectedClientRef.current
+      if (currentClient && !isSyncingRef.current) {
+        console.log(`⏱️ [Auto-Sync 5 min] Executando sincronização periódica em background para: ${currentClient.tradeName || currentClient.corporateName || 'Cliente'}`)
+        if (handleSyncApiRef.current) {
+          handleSyncApiRef.current(currentClient)
+        }
+      }
+    }, FIVE_MINUTES_MS)
+
+    return () => clearInterval(intervalId)
+  }, [selectedClient?.id])
 
   // Ao selecionar um cliente na tela principal
   const handleSelectClient = (client) => {
