@@ -218,7 +218,21 @@ export function App() {
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('focus', runAutoRefreshCheck)
 
-    const handleTokenRefreshed = () => {
+    const handleTokenRefreshed = (e) => {
+      const detail = e?.detail
+      if (detail && detail.accessToken) {
+        setSelectedClient(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            contaAzulConfig: {
+              ...(prev.contaAzulConfig || {}),
+              accessToken: detail.accessToken,
+              refreshToken: detail.refreshToken || prev.contaAzulConfig?.refreshToken
+            }
+          }
+        })
+      }
       setTokenVersion(v => v + 1)
     }
     window.addEventListener('amici_token_refreshed', handleTokenRefreshed)

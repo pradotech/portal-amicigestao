@@ -464,12 +464,12 @@ export async function refreshContaAzulAccessToken(targetClient) {
   const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   
   const tokenUrls = [
-    '/api-contaazul/oauth/token',
-    '/api-contaazul/oauth2/token',
     '/api-ca-v1/oauth2/token',
+    '/api-contaazul/oauth2/token',
+    '/api-contaazul/oauth/token',
     '/api-ca-v1/oauth/token',
-    'https://api-v2.contaazul.com/oauth/token',
-    'https://api.contaazul.com/oauth2/token'
+    'https://api.contaazul.com/oauth2/token',
+    'https://api-v2.contaazul.com/oauth/token'
   ]
 
   let lastError = null
