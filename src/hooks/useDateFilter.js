@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { isDateInRange, normalizeDate, MONTH_NAMES, formatDate, formatMonthYear } from '../utils/formatters'
+import { useState, useMemo, useCallback } from 'react'
+import { isDateInRange, normalizeDate, MONTH_NAMES, formatDate } from '../utils/formatters'
 
 export function useDateFilter(initialPreset = 'this_month') {
   const now = new Date()
@@ -7,98 +7,47 @@ export function useDateFilter(initialPreset = 'this_month') {
   const currentMonth = now.getMonth() + 1 // 1 a 12
   const todayStr = now.toISOString().split('T')[0]
 
-  const [viewMode, setViewMode] = useState('month') // 'month' | 'day' | 'custom'
-  const [selectedYear, setSelectedYear] = useState(currentYear)
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const [selectedDay, setSelectedDay] = useState(todayStr)
+  // Datas padrão do mês atual
+  const lastDayThisMonth = new Date(currentYear, currentMonth, 0).getDate()
+  const initialStartDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`
+  const initialEndDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(lastDayThisMonth).padStart(2, '0')}`
+
+  const [startDate, setStartDate] = useState(initialStartDate)
+  const [endDate, setEndDate] = useState(initialEndDate)
   const [activePreset, setActivePreset] = useState(initialPreset)
 
-  const [customStartDate, setCustomStartDate] = useState(() => {
-    const lastDay = new Date(currentYear, currentMonth, 0).getDate()
-    return `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`
-  })
-
-  const [customEndDate, setCustomEndDate] = useState(() => {
-    const lastDay = new Date(currentYear, currentMonth, 0).getDate()
-    return `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-  })
-
-  // Calcula o startDate e endDate efetivos com base no viewMode
-  const { startDate, endDate, diffDays, isSingleDay } = useMemo(() => {
-    let sDate = ''
-    let eDate = ''
-
-    if (viewMode === 'month') {
-      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate()
-      const mStr = String(selectedMonth).padStart(2, '0')
-      sDate = `${selectedYear}-${mStr}-01`
-      eDate = `${selectedYear}-${mStr}-${String(lastDay).padStart(2, '0')}`
-    } else if (viewMode === 'day') {
-      sDate = selectedDay
-      eDate = selectedDay
-    } else {
-      sDate = customStartDate
-      eDate = customEndDate
-    }
-
-    const sObj = new Date(sDate)
-    const eObj = new Date(eDate)
-    const days = Math.max(1, Math.round((eObj - sObj) / (1000 * 60 * 60 * 24)) + 1)
-
-    return {
-      startDate: sDate,
-      endDate: eDate,
-      diffDays: days,
-      isSingleDay: sDate === eDate || days === 1
-    }
-  }, [viewMode, selectedYear, selectedMonth, selectedDay, customStartDate, customEndDate])
-
-  // Navegação de Mês
-  const handlePrevMonth = () => {
-    if (selectedMonth === 1) {
-      setSelectedMonth(12)
-      setSelectedYear(y => y - 1)
-    } else {
-      setSelectedMonth(m => m - 1)
-    }
-    setViewMode('month')
-  }
-
-  const handleNextMonth = () => {
-    if (selectedMonth === 12) {
-      setSelectedMonth(1)
-      setSelectedYear(y => y + 1)
-    } else {
-      setSelectedMonth(m => m + 1)
-    }
-    setViewMode('month')
-  }
-
-  // Navegação de Dia
-  const handlePrevDay = () => {
+  // Mês e Ano de referência derivados da data de início
+  const selectedYear = useMemo(() => {
     try {
-      const [y, m, d] = selectedDay.split('-').map(Number)
-      const prevDate = new Date(y, m - 1, d - 1)
-      setSelectedDay(prevDate.toISOString().split('T')[0])
-      setViewMode('day')
+      return parseInt(startDate.split('-')[0], 10) || currentYear
     } catch {
-      // fallback
+      return currentYear
     }
-  }
+  }, [startDate, currentYear])
 
-  const handleNextDay = () => {
+  const selectedMonth = useMemo(() => {
     try {
-      const [y, m, d] = selectedDay.split('-').map(Number)
-      const nextDate = new Date(y, m - 1, d + 1)
-      setSelectedDay(nextDate.toISOString().split('T')[0])
-      setViewMode('day')
+      return parseInt(startDate.split('-')[1], 10) || currentMonth
     } catch {
-      // fallback
+      return currentMonth
     }
-  }
+  }, [startDate, currentMonth])
 
-  // Presets Rápidos
-  const handleApplyPreset = (preset) => {
+  // Contagem de dias no intervalo selecionado
+  const diffDays = useMemo(() => {
+    if (!startDate || !endDate) return 1
+    try {
+      const s = new Date(startDate)
+      const e = new Date(endDate)
+      const diff = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1
+      return Math.max(1, diff)
+    } catch {
+      return 1
+    }
+  }, [startDate, endDate])
+
+  // Aplicação de Presets de Período Rápidos
+  const handleApplyPreset = useCallback((preset) => {
     setActivePreset(preset)
     const d = new Date()
     const y = d.getFullYear()
@@ -106,81 +55,130 @@ export function useDateFilter(initialPreset = 'this_month') {
     const today = d.toISOString().split('T')[0]
 
     if (preset === 'today') {
-      setViewMode('day')
-      setSelectedDay(today)
-    } else if (preset === '7days') {
-      setViewMode('custom')
-      const past7 = new Date(d.getTime() - 7 * 86400000).toISOString().split('T')[0]
-      setCustomStartDate(past7)
-      setCustomEndDate(today)
+      setStartDate(today)
+      setEndDate(today)
     } else if (preset === 'this_month') {
-      setViewMode('month')
-      setSelectedYear(y)
-      setSelectedMonth(m)
+      const lastDay = new Date(y, m, 0).getDate()
+      setStartDate(`${y}-${String(m).padStart(2, '0')}-01`)
+      setEndDate(`${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`)
     } else if (preset === 'last_month') {
-      setViewMode('month')
-      if (m === 1) {
-        setSelectedMonth(12)
-        setSelectedYear(y - 1)
-      } else {
-        setSelectedMonth(m - 1)
-        setSelectedYear(y)
-      }
+      const prevM = m === 1 ? 12 : m - 1
+      const prevY = m === 1 ? y - 1 : y
+      const lastDay = new Date(prevY, prevM, 0).getDate()
+      setStartDate(`${prevY}-${String(prevM).padStart(2, '0')}-01`)
+      setEndDate(`${prevY}-${String(prevM).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`)
+    } else if (preset === '30days') {
+      const past30 = new Date(d.getTime() - 30 * 86400000).toISOString().split('T')[0]
+      setStartDate(past30)
+      setEndDate(today)
     } else if (preset === '90days') {
-      setViewMode('custom')
       const past90 = new Date(d.getTime() - 90 * 86400000).toISOString().split('T')[0]
-      setCustomStartDate(past90)
-      setCustomEndDate(today)
-    } else if (preset === 'year_2026') {
-      setViewMode('custom')
-      setCustomStartDate('2026-01-01')
-      setCustomEndDate('2026-12-31')
+      setStartDate(past90)
+      setEndDate(today)
+    } else if (preset === 'this_year') {
+      setStartDate(`${y}-01-01`)
+      setEndDate(`${y}-12-31`)
+    } else if (preset === 'all_time') {
+      setStartDate('2024-01-01')
+      setEndDate('2027-12-31')
     }
-  }
+  }, [])
 
-  // Helper para filtrar listas por dueDate
-  const filterByDate = (items = [], dateField = 'dueDate') => {
+  // Navegação para o Mês Anterior
+  const handlePrevMonth = useCallback(() => {
+    let y = selectedYear
+    let m = selectedMonth - 1
+    if (m < 1) {
+      m = 12
+      y -= 1
+    }
+    const lastDay = new Date(y, m, 0).getDate()
+    setStartDate(`${y}-${String(m).padStart(2, '0')}-01`)
+    setEndDate(`${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`)
+    setActivePreset('custom')
+  }, [selectedYear, selectedMonth])
+
+  // Navegação para o Próximo Mês
+  const handleNextMonth = useCallback(() => {
+    let y = selectedYear
+    let m = selectedMonth + 1
+    if (m > 12) {
+      m = 1
+      y += 1
+    }
+    const lastDay = new Date(y, m, 0).getDate()
+    setStartDate(`${y}-${String(m).padStart(2, '0')}-01`)
+    setEndDate(`${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`)
+    setActivePreset('custom')
+  }, [selectedYear, selectedMonth])
+
+  // Selecionar Mês Específico diretamente
+  const setSelectedMonthDirect = useCallback((m, y = selectedYear) => {
+    const lastDay = new Date(y, m, 0).getDate()
+    setStartDate(`${y}-${String(m).padStart(2, '0')}-01`)
+    setEndDate(`${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`)
+    setActivePreset('custom')
+  }, [selectedYear])
+
+  // Helper para filtrar listas de itens pelo intervalo [startDate, endDate]
+  const filterByDate = useCallback((items = [], dateField = 'dueDate') => {
     return items.filter(item => {
-      const val = item[dateField] || item.due_date || item.date || item.vencimento
+      const val = item[dateField] || item.due_date || item.date || item.issueDate || item.vencimento
       return isDateInRange(val, startDate, endDate)
     })
-  }
+  }, [startDate, endDate])
 
-  // Descrição do Período
+  // Rótulo textual amigável do período
   const periodLabel = useMemo(() => {
-    if (viewMode === 'month') {
-      return `${MONTH_NAMES[selectedMonth - 1]} de ${selectedYear}`
+    if (!startDate || !endDate) return 'Período Completo'
+    
+    // Se for exatamente o mês inteiro (ex: 2026-10-01 a 2026-10-31)
+    const [sY, sM, sD] = startDate.split('-').map(Number)
+    const [eY, eM, eD] = endDate.split('-').map(Number)
+
+    if (sY === eY && sM === eM && sD === 1) {
+      const lastDay = new Date(sY, sM, 0).getDate()
+      if (eD === lastDay) {
+        return `${MONTH_NAMES[sM - 1]} de ${sY}`
+      }
     }
-    if (viewMode === 'day') {
-      return `${formatDate(selectedDay)}`
+
+    if (startDate === endDate) {
+      return `${formatDate(startDate)}`
     }
+
     return `${formatDate(startDate)} até ${formatDate(endDate)}`
-  }, [viewMode, selectedMonth, selectedYear, selectedDay, startDate, endDate])
+  }, [startDate, endDate])
 
   return {
-    viewMode,
-    setViewMode,
-    selectedYear,
-    setSelectedYear,
-    selectedMonth,
-    setSelectedMonth,
-    selectedDay,
-    setSelectedDay,
     startDate,
+    setStartDate: (d) => {
+      setStartDate(d)
+      setActivePreset('custom')
+    },
     endDate,
-    customStartDate,
-    setCustomStartDate,
-    customEndDate,
-    setCustomEndDate,
+    setEndDate: (d) => {
+      setEndDate(d)
+      setActivePreset('custom')
+    },
+    selectedYear,
+    setSelectedYear: (y) => {
+      const lastDay = new Date(y, selectedMonth, 0).getDate()
+      setStartDate(`${y}-${String(selectedMonth).padStart(2, '0')}-01`)
+      setEndDate(`${y}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`)
+      setActivePreset('custom')
+    },
+    selectedMonth,
+    setSelectedMonth: (m) => setSelectedMonthDirect(m),
     activePreset,
     diffDays,
-    isSingleDay,
     periodLabel,
+    handleApplyPreset,
     handlePrevMonth,
     handleNextMonth,
-    handlePrevDay,
-    handleNextDay,
-    handleApplyPreset,
-    filterByDate
+    filterByDate,
+    // Compatibilidade com componentes legados
+    viewMode: 'custom',
+    setViewMode: () => {}
   }
 }

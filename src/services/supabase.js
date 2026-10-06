@@ -523,16 +523,32 @@ export async function fetchReceivablesFromSupabase(clientId) {
         mappedStatus = 'today'
       }
 
+      let daysTerm = 30
+      if (r.created_at && r.due_date) {
+        try {
+          const dCreate = new Date(r.created_at.split('T')[0])
+          const dDue = new Date(r.due_date)
+          daysTerm = Math.max(0, Math.round((dDue - dCreate) / (1000 * 60 * 60 * 24))) || 30
+        } catch (e) {
+          daysTerm = 30
+        }
+      }
+
       return {
         id: r.id,
         clientId: r.client_id,
+        orderNumber: r.invoice_number || (r.ca_receivable_id ? String(r.ca_receivable_id).replace(/^bling-rec-|^bling-ped-/, '') : String(r.id)),
+        documentNumber: r.invoice_number || r.ca_receivable_id || String(r.id),
         customer: r.customer_name,
+        customerName: r.customer_name,
         category: r.category_name,
         description: r.description,
         amount: rawAmount,
         amountPaid: receivedAmount,
         amountRemaining: amountRemaining,
+        issueDate: r.created_at ? r.created_at.split('T')[0] : r.due_date,
         dueDate: r.due_date,
+        daysTerm: daysTerm,
         status: mappedStatus,
         paymentMethod: r.payment_method === 'boleto' ? 'Boleto Bancário' : (r.payment_method || 'Boleto / PIX'),
         invoiceNumber: r.invoice_number || 'NF-e Oficial'

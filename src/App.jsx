@@ -454,14 +454,22 @@ export function App() {
             fetchCounterpartiesFromSupabase(targetId)
           ])
 
-          setPayables(supaPayables || [])
-          setReceivables(supaReceivables || [])
+          const finalPayables = (supaPayables && supaPayables.length > 0) ? supaPayables : syncResult.payables
+          const finalReceivables = (supaReceivables && supaReceivables.length > 0)
+            ? supaReceivables.map(sr => {
+                const liveMatch = syncResult.receivables.find(lr => lr.id === sr.id || lr.orderNumber === sr.orderNumber || lr.documentNumber === sr.documentNumber)
+                return liveMatch ? { ...liveMatch, ...sr, items: liveMatch.items || [] } : sr
+              })
+            : syncResult.receivables
+
+          setPayables(finalPayables || [])
+          setReceivables(finalReceivables || [])
           setTransactions(supaTx || [])
           setRawPessoas(supaPessoas || [])
 
-          const countPay = supaPayables && supaPayables.length > 0 ? supaPayables.length : syncResult.payables.length
-          const countRec = supaReceivables && supaReceivables.length > 0 ? supaReceivables.length : syncResult.receivables.length
-          setSyncToast(`✓ Dados da BR Lumens sincronizados e gravados no banco Supabase (${countPay} a pagar, ${countRec} a receber)!`)
+          const countPay = finalPayables.length
+          const countRec = finalReceivables.length
+          setSyncToast(`✓ Dados da BR Lumens sincronizados e gravados no banco Supabase (${countPay} títulos a pagar, ${countRec} vendas/recebíveis)!`)
         } else {
           // Se a API falhou/expirou, recarrega os dados intactos do Supabase
           await loadDataFromSupabase(targetId)
@@ -732,7 +740,7 @@ export function App() {
                 ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
                 : 'bg-gradient-to-r from-emerald-950/80 via-teal-950/80 to-slate-950 border-emerald-800/40 text-emerald-300'
             }`}>
-              <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="w-full px-2 sm:px-4 flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div className={`flex items-center gap-2 font-medium ${theme === 'light' ? 'text-emerald-900' : 'text-emerald-300'}`}>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span>
@@ -779,7 +787,7 @@ export function App() {
                   ? 'bg-amber-950/40 border-amber-800/40 text-amber-300'
                   : 'bg-gradient-to-r from-sky-950/80 via-cyan-950/80 to-slate-950 border-cyan-800/40 text-cyan-300')
           }`}>
-            <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="w-full px-2 sm:px-4 flex flex-wrap items-center justify-between gap-2 text-xs">
               
               {tokenInfo.isExpired ? (
                 <div className={`flex items-center gap-2 font-medium ${theme === 'light' ? 'text-amber-900' : 'text-amber-300'}`}>
@@ -860,8 +868,8 @@ export function App() {
         </div>
       )}
 
-      {/* Corpo da Aplicação */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto">
+      {/* Corpo da Aplicação (Largura total, Sidebar colada na esquerda) */}
+      <div className="flex-1 flex w-full">
         
         {/* Sidebar Operacional */}
         {viewMode === 'bpo' && (
@@ -878,8 +886,8 @@ export function App() {
           />
         )}
 
-        {/* Área de Conteúdo Principal */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
+        {/* Área de Conteúdo Principal com Máximo Espaço e Fluidez */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 w-full overflow-x-hidden">
           
           {/* MODO PORTAL DO CLIENTE */}
           {viewMode === 'client' ? (

@@ -6,6 +6,22 @@ export function formatCurrency(value) {
   }).format(value)
 }
 
+export function formatCompactCurrency(value) {
+  if (value === undefined || value === null || isNaN(value)) return 'R$ 0'
+  const abs = Math.abs(value)
+  const sign = value < 0 ? '-' : ''
+  if (abs >= 1_000_000) {
+    return `${sign}R$ ${(abs / 1_000_000).toFixed(2).replace('.', ',')}M`
+  }
+  if (abs >= 10_000) {
+    return `${sign}R$ ${(abs / 1_000).toFixed(0)}k`
+  }
+  if (abs >= 1_000) {
+    return `${sign}R$ ${(abs / 1_000).toFixed(1).replace('.0', '').replace('.', ',')}k`
+  }
+  return formatCurrency(value)
+}
+
 export function formatDate(dateString) {
   if (!dateString) return '-'
   try {

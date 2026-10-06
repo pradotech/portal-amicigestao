@@ -39,7 +39,7 @@ export function Navbar({
     <header className={`no-print print:hidden sticky top-0 z-40 w-full backdrop-blur-xl border-b transition-colors shadow-sm ${
       isLight ? 'bg-white/95 border-slate-200 text-slate-900' : 'bg-slate-950/80 border-slate-800/80 text-slate-100'
     }`}>
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4">
           
           {/* Lado Esquerdo: Menu Hambúrguer (Mobile) + Logo Amici & Botão Trocar Cliente */}

@@ -474,39 +474,103 @@ export async function fetchBlingPedidosVendas(apiKey) {
 }
 
 /**
+ * Busca Notas Fiscais Eletrônicas (NF-e) na API v3 do Bling com paginação completa
+ */
+export async function fetchBlingNotasFiscais(apiKey) {
+  const allNfes = []
+  let page = 1
+  const maxPages = 30
+
+  try {
+    while (page <= maxPages) {
+      const res = await fetchBlingApi(`/nfe?pagina=${page}&limite=100`, apiKey)
+      if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+        allNfes.push(...res.data)
+        page++
+      } else {
+        if (page === 1) {
+          const fallbackRes = await fetchBlingApi(`/nfe?limite=100`, apiKey)
+          if (fallbackRes.ok && Array.isArray(fallbackRes.data)) {
+            allNfes.push(...fallbackRes.data)
+          }
+        }
+        break
+      }
+    }
+    console.log(`[Bling API] Notas Fiscais (NF-e) recuperadas: ${allNfes.length} notas.`)
+    return allNfes
+  } catch (err) {
+    console.warn('Aviso ao consultar NF-e no Bling:', err)
+    return allNfes
+  }
+}
+
+/**
+ * Busca Produtos cadastrados na API v3 do Bling
+ */
+export async function fetchBlingProdutos(apiKey) {
+  const allProducts = []
+  let page = 1
+  const maxPages = 20
+
+  try {
+    while (page <= maxPages) {
+      const res = await fetchBlingApi(`/produtos?pagina=${page}&limite=100`, apiKey)
+      if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+        allProducts.push(...res.data)
+        page++
+      } else {
+        break
+      }
+    }
+    console.log(`[Bling API] Produtos recuperados: ${allProducts.length} itens.`)
+    return allProducts
+  } catch (err) {
+    console.warn('Aviso ao consultar produtos no Bling:', err)
+    return allProducts
+  }
+}
+
+/**
  * Sincronizador Completo da API Bling ERP (v3) para a BR Lumens (Amici Comex)
+ * Puxa histórico de vendas, faturamento, contas a receber, notas fiscais e clientes
  */
 export async function syncRealBlingData(targetClient, onProgress = () => {}) {
   const clientTradeName = targetClient?.tradeName || 'BR Lumens'
   const clientId = targetClient?.id || 'd0000000-0000-0000-0000-000000000002'
   const todayStr = new Date().toISOString().split('T')[0]
 
-  onProgress({ step: 'init', message: `Conectando à API v3 do Bling ERP de ${clientTradeName}...`, progress: 15 })
-  await new Promise(r => setTimeout(r, 200))
-
-  onProgress({ step: 'auth', message: `Verificando credenciais OAuth e token da BR Lumens...`, progress: 30 })
+  onProgress({ step: 'init', message: `Conectando à API v3 do Bling ERP de ${clientTradeName}...`, progress: 10 })
   await new Promise(r => setTimeout(r, 150))
 
-  onProgress({ step: 'payables', message: `Importando contas a pagar de importação e fornecedores (/v3/contas/pagar)...`, progress: 45 })
-  const livePayables = await fetchBlingContasPagar()
+  onProgress({ step: 'auth', message: `Verificando credenciais OAuth e token da BR Lumens...`, progress: 20 })
   await new Promise(r => setTimeout(r, 150))
 
-  onProgress({ step: 'orders', message: `Consultando pedidos de venda e faturamento (/v3/pedidos/vendas)...`, progress: 65 })
+  onProgress({ step: 'orders', message: `Puxando histórico de pedidos de venda e faturamento (/v3/pedidos/vendas)...`, progress: 35 })
   const livePedidos = await fetchBlingPedidosVendas()
   await new Promise(r => setTimeout(r, 150))
 
-  onProgress({ step: 'receivables', message: `Importando contas a receber (/v3/contas/receber)...`, progress: 80 })
+  onProgress({ step: 'nfe', message: `Puxando notas fiscais eletrônicas emitidas (/v3/nfe)...`, progress: 50 })
+  const liveNfes = await fetchBlingNotasFiscais()
+  await new Promise(r => setTimeout(r, 150))
+
+  onProgress({ step: 'receivables', message: `Importando contas a receber e parcelas (/v3/contas/receber)...`, progress: 65 })
   const liveReceivables = await fetchBlingContasReceber()
   await new Promise(r => setTimeout(r, 150))
 
-  onProgress({ step: 'contacts', message: `Carregando parceiros comerciais (/v3/contatos)...`, progress: 90 })
+  onProgress({ step: 'contacts', message: `Carregando parceiros comerciais e clientes (/v3/contatos)...`, progress: 80 })
   const liveContatos = await fetchBlingContatos()
   await new Promise(r => setTimeout(r, 150))
 
-  onProgress({ step: 'mapping', message: `Processando fluxo financeiro e faturamento da BR Lumens...`, progress: 95 })
+  onProgress({ step: 'products', message: `Carregando catálogo e produtos (/v3/produtos)...`, progress: 90 })
+  const liveProdutos = await fetchBlingProdutos()
+  await new Promise(r => setTimeout(r, 150))
 
-  // 1. Mapeamento de Contas a Pagar
-  const validLivePayables = livePayables.filter(p => !parseBlingSituacao(p.situacao).isCanceled)
+  onProgress({ step: 'mapping', message: `Processando inteligência de vendas, PMR e ticket médio...`, progress: 95 })
+
+  // 1. Mapeamento de Contas a Pagar (Standby)
+  const livePayables = await fetchBlingContasPagar()
+  const validLivePayables = (livePayables || []).filter(p => !parseBlingSituacao(p.situacao).isCanceled)
 
   const mappedPayables = validLivePayables.map((p, idx) => {
     const rawAmount = Number(p.valor || p.total || 0)
@@ -555,12 +619,24 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
       const sitInfo = parseBlingSituacao(ped.situacao)
       if (sitInfo.isCanceled) return
 
-      const rawAmount = Number(ped.total || ped.valor || 0)
+      const rawAmount = Number(ped.total || ped.totalVenda || ped.valor || 0)
       const isReceived = sitInfo.isReceived
       const isPartial = sitInfo.isPartial
       const receivedAmount = isReceived ? rawAmount : 0
       const remainingAmount = isReceived ? 0 : rawAmount
-      const dueDate = ped.dataSaida || ped.data || ped.dataPrevista || todayStr
+      const issueDate = ped.data || ped.dataOperacao || ped.dataEmissao || todayStr
+      const dueDate = ped.dataSaida || ped.dataPrevista || ped.data || todayStr
+
+      // Cálculo de dias de prazo concedido
+      let daysTerm = 0
+      try {
+        const dIssue = new Date(issueDate)
+        const dDue = new Date(dueDate)
+        const diffTime = dDue - dIssue
+        daysTerm = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)))
+      } catch (e) {
+        daysTerm = 0
+      }
 
       let status = 'pending'
       if (isReceived) {
@@ -573,14 +649,34 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
         status = 'today'
       }
 
+      // Itens do pedido se disponíveis
+      const rawItems = ped.itens || ped.itensPedido || []
+      const mappedItems = Array.isArray(rawItems) ? rawItems.map((item, itemIdx) => {
+        const prod = item.produto || item
+        return {
+          id: prod.id || `${ped.id}-item-${itemIdx}`,
+          code: prod.codigo || prod.sku || `PROD-${itemIdx + 1}`,
+          description: prod.descricao || prod.nome || 'Produto BR Lumens LED',
+          quantity: Number(item.quantidade || 1),
+          unitValue: Number(item.valor || item.valorUnitario || prod.preco || 0),
+          totalValue: Number(item.valorTotal || (Number(item.quantidade || 1) * Number(item.valor || item.valorUnitario || prod.preco || 0)))
+        }
+      }) : []
+
       const idKey = `bling-ped-${ped.id || ped.numero || idx}`
       combinedReceivablesMap.set(idKey, {
         id: idKey,
+        rawId: ped.id,
+        orderNumber: ped.numero || String(ped.id || idx + 1),
         clientId: clientId,
         customer: ped.contato?.nome || ped.cliente?.nome || 'Cliente BR Lumens',
         customerName: ped.contato?.nome || ped.cliente?.nome || 'Cliente BR Lumens',
+        customerDocument: ped.contato?.numeroDocumento || null,
         description: `Pedido de Venda #${ped.numero || ped.id || idx + 1}`,
+        issueDate: issueDate,
         dueDate: dueDate,
+        paymentDate: isReceived ? dueDate : null,
+        daysTerm: daysTerm,
         amount: rawAmount,
         amountPaid: receivedAmount,
         amountRemaining: remainingAmount,
@@ -589,13 +685,15 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
         bankAccount: 'Itaú PJ',
         erpProvider: 'Bling ERP v3',
         documentNumber: String(ped.numero || ped.id || ''),
-        paymentMethod: 'Boleto / PIX / Faturamento'
+        paymentMethod: ped.formaPagamento?.descricao || 'Boleto / PIX / Faturamento',
+        items: mappedItems,
+        invoiceNumber: ped.notaFiscal?.numero || ped.numeroNotaFiscal || null
       })
     })
   }
 
   // Mapeia contas a receber do Bling (/contas/receber)
-  const validLiveReceivables = liveReceivables.filter(r => !parseBlingSituacao(r.situacao).isCanceled)
+  const validLiveReceivables = (liveReceivables || []).filter(r => !parseBlingSituacao(r.situacao).isCanceled)
 
   validLiveReceivables.forEach((r, idx) => {
     const rawAmount = Number(r.valor || r.total || 0)
@@ -604,7 +702,19 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
     const isReceived = sitInfo.isReceived || (rawAmount > 0 && rawSaldo === 0)
     const isPartial = sitInfo.isPartial || (!isReceived && rawSaldo > 0 && rawSaldo < rawAmount)
     const receivedAmount = isReceived ? rawAmount : (isPartial ? Math.max(0, rawAmount - rawSaldo) : 0)
+    const issueDate = r.dataEmissao || r.data || todayStr
     const dueDate = r.vencimento || r.dataVencimento || r.data || todayStr
+    const paymentDate = r.dataLiquidacao || r.dataPagamento || (isReceived ? dueDate : null)
+
+    let daysTerm = 0
+    try {
+      const dIssue = new Date(issueDate)
+      const dDue = new Date(paymentDate || dueDate)
+      const diffTime = dDue - dIssue
+      daysTerm = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)))
+    } catch (e) {
+      daysTerm = 0
+    }
 
     let status = 'pending'
     if (isReceived) {
@@ -618,15 +728,20 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
     }
 
     const idKey = `bling-rec-${r.id || idx}`
-    // Se não tivermos o pedido correspondente ou para títulos adicionais
     if (!combinedReceivablesMap.has(idKey)) {
       combinedReceivablesMap.set(idKey, {
         id: idKey,
+        rawId: r.id,
+        orderNumber: r.numeroDocumento || String(r.id || idx + 1),
         clientId: clientId,
         customer: r.contato?.nome || r.cliente?.nome || 'Cliente BR Lumens',
         customerName: r.contato?.nome || r.cliente?.nome || 'Cliente BR Lumens',
+        customerDocument: r.contato?.numeroDocumento || null,
         description: r.historico || r.descricao || (r.numeroDocumento ? `Título #${r.numeroDocumento}` : `Recebimento Bling #${r.id || idx + 1}`),
+        issueDate: issueDate,
         dueDate: dueDate,
+        paymentDate: paymentDate,
+        daysTerm: daysTerm,
         amount: rawAmount,
         amountPaid: receivedAmount,
         amountRemaining: isReceived ? 0 : rawSaldo,
@@ -635,14 +750,36 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
         bankAccount: r.portador?.nome || r.portador?.descricao || 'Itaú PJ',
         erpProvider: 'Bling ERP v3',
         documentNumber: String(r.numeroDocumento || r.id || ''),
-        paymentMethod: r.formaPagamento?.descricao || 'Boleto / PIX'
+        paymentMethod: r.formaPagamento?.descricao || 'Boleto / PIX',
+        items: [],
+        invoiceNumber: r.numeroDocumento || null
       })
+    }
+  })
+
+  // 3. Mapeamento de Notas Fiscais (NF-e)
+  const mappedInvoices = (liveNfes || []).map((nfe, idx) => {
+    const rawVal = Number(nfe.valorNota || nfe.total || nfe.valor || 0)
+    return {
+      id: `bling-nfe-${nfe.id || idx}`,
+      rawId: nfe.id,
+      number: String(nfe.numero || nfe.id || idx + 1),
+      series: String(nfe.serie || '1'),
+      key: nfe.chaveAcesso || nfe.chave || null,
+      issueDate: nfe.dataEmissao || nfe.data || todayStr,
+      customer: nfe.contato?.nome || nfe.cliente?.nome || 'Destinatário BR Lumens',
+      customerDocument: nfe.contato?.numeroDocumento || null,
+      amount: rawVal,
+      status: String(nfe.situacao || nfe.status || 'Autorizada'),
+      type: nfe.tipo === 0 ? 'Entrada' : 'Saída',
+      danfeUrl: nfe.linkDanfe || nfe.linkPDF || null
     }
   })
 
   const finalPayables = mappedPayables
   const finalReceivables = Array.from(combinedReceivablesMap.values())
-  const finalContatos = liveContatos
+  const finalContatos = liveContatos || []
+  const finalProdutos = liveProdutos || []
 
   onProgress({ step: 'done', message: `✓ Dados da BR Lumens sincronizados com sucesso via Bling API v3!`, progress: 100 })
 
@@ -650,6 +787,8 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
     success: true,
     payables: finalPayables,
     receivables: finalReceivables,
+    invoices: mappedInvoices,
+    products: finalProdutos,
     transactions: [],
     counterparties: finalContatos,
     categories: [],
@@ -658,6 +797,8 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
       provider: 'Bling ERP v3',
       payablesCount: finalPayables.length,
       receivablesCount: finalReceivables.length,
+      invoicesCount: mappedInvoices.length,
+      productsCount: finalProdutos.length,
       syncedAt: new Date().toISOString()
     }
   }

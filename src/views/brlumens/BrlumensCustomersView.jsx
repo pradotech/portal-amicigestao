@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   Users,
   TrendingUp,
@@ -15,7 +15,18 @@ import {
   RefreshCw,
   ShoppingBag,
   FileCheck,
-  Send
+  Send,
+  FileText,
+  Package,
+  Award,
+  CalendarDays,
+  Percent,
+  ExternalLink,
+  ChevronRight,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
+  ShieldCheck
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { DateFilterBar } from '../../components/DateFilterBar'
@@ -29,27 +40,26 @@ export function BrlumensCustomersView({
   onSyncApi,
   isSyncing = false
 }) {
-  const [activeTab, setActiveTab] = useState('receivables') // 'receivables' | 'customers'
+  const [activeTab, setActiveTab] = useState('receivables') // 'receivables' | 'customers' | 'products'
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
 
-  // Hook centralizado de filtro de data
+  // Estado de paginação
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Reseta a página ao mudar de aba ou filtro
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [activeTab, filterStatus, searchTerm])
+
+  // Hook centralizado de filtro de data (Padrão: Mês Atual no formato Calendário)
   const dateFilter = useDateFilter('this_month')
   const {
-    viewMode,
-    setViewMode,
-    selectedYear,
-    setSelectedYear,
-    selectedMonth,
-    setSelectedMonth,
-    selectedDay,
-    setSelectedDay,
     startDate,
     endDate,
-    customStartDate,
-    setCustomStartDate,
-    customEndDate,
-    setCustomEndDate,
+    setStartDate,
+    setEndDate,
     activePreset,
     periodLabel,
     handleApplyPreset,
@@ -59,81 +69,175 @@ export function BrlumensCustomersView({
   } = dateFilter
 
   // Garante isolamento estrito: apenas títulos da BR Lumens (Bling ERP)
-  const clientReceivables = receivables.filter(r => 
-    r.clientId === 'd0000000-0000-0000-0000-000000000002' ||
-    r.erpProvider === 'Bling ERP v3' ||
-    String(r.id).startsWith('bling-')
-  )
+  const allBrlumensReceivables = useMemo(() => {
+    return receivables.filter(r => 
+      !r.clientId ||
+      r.clientId === 'd0000000-0000-0000-0000-000000000002' ||
+      r.erpProvider === 'Bling ERP v3' ||
+      String(r.id).startsWith('bling-')
+    )
+  }, [receivables])
 
   // Filtra lançamentos do Bling pelo período selecionado no DateFilterBar
-  const dateFilteredReceivables = filterByDate(clientReceivables, 'dueDate')
+  const dateFilteredReceivables = useMemo(() => {
+    return filterByDate(allBrlumensReceivables, 'dueDate')
+  }, [allBrlumensReceivables, filterByDate])
 
-  const filteredReceivables = dateFilteredReceivables.filter(receivable => {
-    const desc = receivable.description || ''
-    const cust = receivable.customer || receivable.customerName || receivable.customer_name || ''
-    const cat = receivable.category || receivable.category_name || ''
-    const matchSearch =
-      desc.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cust.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cat.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchStatus = filterStatus === 'all' || receivable.status === filterStatus
-    return matchSearch && matchStatus
-  })
+  const filteredReceivables = useMemo(() => {
+    return dateFilteredReceivables.filter(receivable => {
+      const desc = receivable.description || ''
+      const cust = receivable.customer || receivable.customerName || ''
+      const cat = receivable.category || ''
+      const doc = receivable.orderNumber || receivable.documentNumber || receivable.id || ''
+      const matchSearch =
+        desc.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cust.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cat.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.toLowerCase().includes(searchTerm.toLowerCase())
 
-  // Métricas dos 5 Cards da BR Lumens (Bling ERP)
+      const isPaid = receivable.status === 'paid' || receivable.status === 'received'
+      let matchStatus = true
+      if (filterStatus === 'received') matchStatus = isPaid
+      if (filterStatus === 'pending') matchStatus = !isPaid
+      if (filterStatus === 'overdue') matchStatus = receivable.status === 'overdue'
+
+      return matchSearch && matchStatus
+    })
+  }, [dateFilteredReceivables, searchTerm, filterStatus])
+
+  // Métricas dos Cards da BR Lumens (Bling ERP)
   const nowStr = new Date().toISOString().split('T')[0]
 
-  const metrics = dateFilteredReceivables.reduce(
-    (acc, item) => {
-      const val = Number(item.amount || 0)
-      const due = item.dueDate || ''
-      const isPaid = item.status === 'paid' || item.status === 'received'
+  const metrics = useMemo(() => {
+    return dateFilteredReceivables.reduce(
+      (acc, item) => {
+        const val = Number(item.amount || 0)
+        const due = item.dueDate || ''
+        const isPaid = item.status === 'paid' || item.status === 'received'
 
-      acc.totalPeriod += val
+        acc.totalPeriod += val
 
-      if (isPaid) {
-        acc.recebido += val
-        acc.countRecebido += 1
-      } else {
-        if (due < nowStr) {
-          acc.vencido += val
-          acc.countVencido += 1
-        } else if (due === nowStr) {
-          acc.venceHoje += val
-          acc.countVenceHoje += 1
+        if (isPaid) {
+          acc.recebido += val
+          acc.countRecebido += 1
         } else {
-          acc.aVencer += val
-          acc.countAVencer += 1
+          if (due < nowStr) {
+            acc.vencido += val
+            acc.countVencido += 1
+          } else if (due === nowStr) {
+            acc.venceHoje += val
+            acc.countVenceHoje += 1
+          } else {
+            acc.aVencer += val
+            acc.countAVencer += 1
+          }
         }
-      }
 
-      return acc
-    },
-    {
-      vencido: 0,
-      countVencido: 0,
-      venceHoje: 0,
-      countVenceHoje: 0,
-      aVencer: 0,
-      countAVencer: 0,
-      recebido: 0,
-      countRecebido: 0,
-      totalPeriod: 0
-    }
-  )
+        return acc
+      },
+      {
+        vencido: 0,
+        countVencido: 0,
+        venceHoje: 0,
+        countVenceHoje: 0,
+        aVencer: 0,
+        countAVencer: 0,
+        recebido: 0,
+        countRecebido: 0,
+        totalPeriod: 0
+      }
+    )
+  }, [dateFilteredReceivables, nowStr])
+
+  // Ranking de Clientes
+  const customerRanking = useMemo(() => {
+    const map = new Map()
+    dateFilteredReceivables.forEach(r => {
+      const name = r.customer || r.customerName || 'Cliente Bling'
+      const amt = Number(r.amount || 0)
+      const isPaid = r.status === 'paid' || r.status === 'received'
+      const paidAmt = isPaid ? Number(r.amountPaid || r.amount || 0) : 0
+
+      if (!map.has(name)) {
+        map.set(name, {
+          name,
+          totalAmount: 0,
+          totalPaid: 0,
+          ordersCount: 0,
+          document: r.customerDocument || null
+        })
+      }
+      const cur = map.get(name)
+      cur.totalAmount += amt
+      cur.totalPaid += paidAmt
+      cur.ordersCount += 1
+    })
+
+    const totalBase = dateFilteredReceivables.reduce((acc, r) => acc + Number(r.amount || 0), 0) || 1
+
+    return Array.from(map.values())
+      .map(c => ({
+        ...c,
+        ticketMedio: c.ordersCount > 0 ? (c.totalAmount / c.ordersCount) : 0,
+        sharePercent: (c.totalAmount / totalBase) * 100
+      }))
+      .sort((a, b) => b.totalAmount - a.totalAmount)
+  }, [dateFilteredReceivables])
+
+  // Ranking de Produtos
+  const productRanking = useMemo(() => {
+    const map = new Map()
+    dateFilteredReceivables.forEach(r => {
+      const items = r.items || []
+      if (items.length > 0) {
+        items.forEach(item => {
+          const desc = item.description || 'Produto LED BR Lumens'
+          const qty = Number(item.quantity || 1)
+          const val = Number(item.totalValue || (qty * Number(item.unitValue || 0)) || 0)
+          const code = item.code || 'SKU-LED'
+
+          if (!map.has(desc)) {
+            map.set(desc, { description: desc, code, quantity: 0, totalAmount: 0 })
+          }
+          const cur = map.get(desc)
+          cur.quantity += qty
+          cur.totalAmount += val
+        })
+      } else {
+        const desc = r.category || 'Módulos & Iluminação LED'
+        const val = Number(r.amount || 0)
+        if (!map.has(desc)) {
+          map.set(desc, { description: desc, code: 'LINHA-LED', quantity: 0, totalAmount: 0 })
+        }
+        const cur = map.get(desc)
+        cur.quantity += 1
+        cur.totalAmount += val
+      }
+    })
+
+    const totalBase = Array.from(map.values()).reduce((acc, p) => acc + p.totalAmount, 0) || 1
+
+    return Array.from(map.values())
+      .map(p => ({
+        ...p,
+        unitAverage: p.quantity > 0 ? (p.totalAmount / p.quantity) : 0,
+        sharePercent: (p.totalAmount / totalBase) * 100
+      }))
+      .sort((a, b) => b.totalAmount - a.totalAmount)
+  }, [dateFilteredReceivables])
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300 text-slate-100">
       
-      {/* Cabeçalho */}
+      {/* 1. Cabeçalho */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
-            <TrendingUp className="w-7 h-7 text-emerald-400" />
-            <span>Faturamento & Contas a Receber ({clientName})</span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+            <TrendingUp className="w-8 h-8 text-emerald-400" />
+            <span>Vendas, Faturamento & Recebíveis ({clientName})</span>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Gestão dos clientes compradores, pedidos faturados e cobrança via <strong>Bling ERP v3</strong> no período de <strong>{periodLabel}</strong>.
+            Gestão de pedidos faturados, notas fiscais (NF-e) e inteligência de vendas via <strong>Bling ERP v3</strong> em <strong>{periodLabel}</strong>.
           </p>
         </div>
 
@@ -142,318 +246,442 @@ export function BrlumensCustomersView({
             type="button"
             onClick={onSyncApi}
             disabled={isSyncing}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-950/40 transition-all active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-950/40 transition-all active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Sincronizando com Bling...' : 'Sincronizar Vendas Bling ERP'}</span>
+            <span>{isSyncing ? 'Sincronizando com Bling...' : 'Sincronizar Vendas Bling API'}</span>
           </button>
         )}
       </div>
 
-      {/* Alternância de Abas */}
-      <div className="flex items-center gap-2 p-1 bg-slate-900 rounded-2xl border border-slate-800 w-fit">
+      {/* 2. Barra Global de Datas em Formato de Calendário */}
+      <DateFilterBar
+        startDate={startDate}
+        endDate={endDate}
+        setStartDate={setStartDate}
+        setEndDate={setEndDate}
+        activePreset={activePreset}
+        handleApplyPreset={handleApplyPreset}
+        handlePrevMonth={handlePrevMonth}
+        handleNextMonth={handleNextMonth}
+        periodLabel={periodLabel}
+        filteredCount={dateFilteredReceivables.length}
+        totalCount={allBrlumensReceivables.length}
+        receivablesTotal={metrics.totalPeriod}
+        showAmounts={true}
+      />
+
+      {/* 3. Cards de Resumo Financeiro */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total do Período */}
+        <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Faturamento Total</span>
+            <span className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
+              <DollarSign className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-2xl font-extrabold text-white mt-2">
+            {formatCurrency(metrics.totalPeriod)}
+          </div>
+          <div className="text-xs text-slate-400 mt-1">
+            {dateFilteredReceivables.length} pedidos no período
+          </div>
+        </div>
+
+        {/* Recebidos / Faturados */}
+        <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recebido / Liquidado</span>
+            <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-2xl font-extrabold text-emerald-300 mt-2">
+            {formatCurrency(metrics.recebido)}
+          </div>
+          <div className="text-xs text-slate-400 mt-1">
+            {metrics.countRecebido} títulos liquidados
+          </div>
+        </div>
+
+        {/* A Vencer */}
+        <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">A Vencer</span>
+            <span className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+              <Clock className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-2xl font-extrabold text-amber-300 mt-2">
+            {formatCurrency(metrics.aVencer)}
+          </div>
+          <div className="text-xs text-slate-400 mt-1">
+            {metrics.countAVencer} títulos dentro do prazo
+          </div>
+        </div>
+
+        {/* Vencidos */}
+        <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Vencidos</span>
+            <span className="p-2 rounded-xl bg-rose-500/10 text-rose-400">
+              <AlertTriangle className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-2xl font-extrabold text-rose-300 mt-2">
+            {formatCurrency(metrics.vencido)}
+          </div>
+          <div className="text-xs text-slate-400 mt-1">
+            {metrics.countVencido} títulos pendentes
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Abas de Visualização (Recebíveis, NF-e, Clientes, Produtos) */}
+      <div className="flex border-b border-slate-800 gap-2 overflow-x-auto pb-1">
         <button
           type="button"
           onClick={() => setActiveTab('receivables')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${
             activeTab === 'receivables'
-              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+              : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          <TrendingUp className="w-4 h-4 text-emerald-400" />
-          <span>Contas a Receber do Período ({dateFilteredReceivables.length})</span>
+          <TrendingUp className="w-4 h-4" />
+          <span>Contas a Receber & Vendas ({filteredReceivables.length})</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('customers')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${
             activeTab === 'customers'
-              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+              : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          <Users className="w-4 h-4 text-cyan-400" />
-          <span>Clientes / Compradores Bling ({rawPessoas.length > 0 ? rawPessoas.length : '12'})</span>
+          <Users className="w-4 h-4" />
+          <span>Ranking de Clientes ({customerRanking.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('products')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${
+            activeTab === 'products'
+              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+              : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          <span>Produtos Mais Vendidos ({productRanking.length})</span>
         </button>
       </div>
 
-      {/* BARRA DE FILTRO DE PERÍODO */}
-      <DateFilterBar
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        selectedYear={selectedYear}
-        selectedMonth={selectedMonth}
-        selectedDay={selectedDay}
-        startDate={startDate}
-        endDate={endDate}
-        customStartDate={customStartDate}
-        customEndDate={customEndDate}
-        activePreset={activePreset}
-        onMonthChange={setSelectedMonth}
-        onYearChange={setSelectedYear}
-        onDayChange={setSelectedDay}
-        onCustomDateChange={(start, end) => {
-          setCustomStartDate(start)
-          setCustomEndDate(end)
-        }}
-        onPresetChange={handleApplyPreset}
-        onPrevMonth={handlePrevMonth}
-        onNextMonth={handleNextMonth}
-      />
-
-      {/* 5 CARDS DE MÉTRICAS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        
-        {/* Card 1: Vencidos */}
-        <div className="p-4 rounded-2xl bg-slate-900/90 border border-rose-900/40 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between text-rose-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Vencidos</span>
-            <AlertTriangle className="w-4 h-4" />
-          </div>
-          <div className="text-xl font-extrabold text-white">
-            {formatCurrency(metrics.vencido)}
-          </div>
-          <div className="text-[11px] text-rose-300/80 mt-1">
-            {metrics.countVencido} {metrics.countVencido === 1 ? 'recebível vencido' : 'recebíveis vencidos'}
-          </div>
-        </div>
-
-        {/* Card 2: Vencem Hoje */}
-        <div className="p-4 rounded-2xl bg-slate-900/90 border border-amber-900/40 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between text-amber-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Vencem Hoje</span>
-            <Clock className="w-4 h-4" />
-          </div>
-          <div className="text-xl font-extrabold text-white">
-            {formatCurrency(metrics.venceHoje)}
-          </div>
-          <div className="text-[11px] text-amber-300/80 mt-1">
-            {metrics.countVenceHoje} {metrics.countVenceHoje === 1 ? 'recebível para hoje' : 'recebíveis para hoje'}
-          </div>
-        </div>
-
-        {/* Card 3: A Vencer */}
-        <div className="p-4 rounded-2xl bg-slate-900/90 border border-emerald-900/40 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between text-emerald-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">A Vencer</span>
-            <Calendar className="w-4 h-4" />
-          </div>
-          <div className="text-xl font-extrabold text-white">
-            {formatCurrency(metrics.aVencer)}
-          </div>
-          <div className="text-[11px] text-emerald-300/80 mt-1">
-            {metrics.countAVencer} {metrics.countAVencer === 1 ? 'fatura a vencer' : 'faturas a vencer'}
-          </div>
-        </div>
-
-        {/* Card 4: Recebidos */}
-        <div className="p-4 rounded-2xl bg-slate-900/90 border border-teal-900/40 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between text-teal-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Recebidos</span>
-            <CheckCircle2 className="w-4 h-4" />
-          </div>
-          <div className="text-xl font-extrabold text-white">
-            {formatCurrency(metrics.recebido)}
-          </div>
-          <div className="text-[11px] text-teal-300/80 mt-1">
-            {metrics.countRecebido} {metrics.countRecebido === 1 ? 'fatura quitada' : 'faturas quitadas'}
-          </div>
-        </div>
-
-        {/* Card 5: Total do Período */}
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-emerald-950/40 border border-emerald-800/40 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between text-emerald-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Total do Período</span>
-            <DollarSign className="w-4 h-4" />
-          </div>
-          <div className="text-xl font-extrabold text-white">
-            {formatCurrency(metrics.totalPeriod)}
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 truncate">
-            {periodLabel}
-          </div>
-        </div>
-
-      </div>
-
-      {/* ABA 1: TABELA DE CONTAS A RECEBER */}
+      {/* 5. Conteúdo da Aba Ativa */}
       {activeTab === 'receivables' && (
-        <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+        <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-4">
           
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          {/* Barra de Filtros e Busca */}
+          {/* Barra de Filtros, Busca e Paginação */}
+          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar por cliente sacado, pedido, categoria..."
+                placeholder="Buscar cliente, número de pedido..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-slate-400" />
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
               >
-                <option value="all">Todos os Status</option>
-                <option value="pending">Aguardando Pagamento</option>
-                <option value="paid">Recebido / Liquidado</option>
+                <option value="all">Todas as Situações</option>
+                <option value="received">Recebidos / Liquidados</option>
+                <option value="pending">Em Aberto</option>
+                <option value="overdue">Vencidos</option>
+              </select>
+
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value))
+                  setCurrentPage(1)
+                }}
+                className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-semibold"
+              >
+                <option value={10}>10 / pág</option>
+                <option value={20}>20 / pág</option>
+                <option value={50}>50 / pág</option>
+                <option value={100}>100 / pág</option>
               </select>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-800">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400">
-                  <th className="p-3.5 font-semibold">Cliente Comprador</th>
-                  <th className="p-3.5 font-semibold">Descrição / Pedido Bling</th>
-                  <th className="p-3.5 font-semibold">Categoria / Banco</th>
-                  <th className="p-3.5 font-semibold">Vencimento</th>
-                  <th className="p-3.5 font-semibold text-right">Valor</th>
-                  <th className="p-3.5 font-semibold text-center">Status</th>
-                  <th className="p-3.5 font-semibold text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {filteredReceivables.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500">
-                      Nenhum recebível de vendas encontrado no Bling para o período de {periodLabel}.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredReceivables.map((item) => {
-                    const isOverdue = item.dueDate < nowStr && item.status !== 'paid'
-                    const custName = item.customer || item.customerName || item.customer_name || 'Cliente BR Lumens'
+          {/* Tabela de Recebíveis */}
+          {filteredReceivables.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-sm">
+              Nenhum título a receber encontrado com os filtros aplicados.
+            </div>
+          ) : (
+            <>
+              {(() => {
+                const totalRec = filteredReceivables.length
+                const totalPages = Math.max(1, Math.ceil(totalRec / pageSize))
+                const safePage = Math.min(currentPage, totalPages)
+                const start = (safePage - 1) * pageSize
+                const end = Math.min(start + pageSize, totalRec)
+                const paginated = filteredReceivables.slice(start, end)
 
-                    return (
-                      <tr
-                        key={item.id}
-                        className="hover:bg-slate-800/40 transition-colors"
-                      >
-                        <td className="p-3.5 font-medium text-white">
-                          <div className="font-bold">{custName}</div>
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            {item.documentNumber ? `NF-e / Doc #${item.documentNumber}` : 'Bling ERP v3'}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-slate-300">
-                          {item.description}
-                        </td>
-                        <td className="p-3.5 text-slate-400">
-                          <div>{item.category || 'Receita de Vendas (Comex)'}</div>
-                          <span className="text-[10px] text-slate-500">{item.bankAccount || 'Itaú PJ'}</span>
-                        </td>
-                        <td className="p-3.5 font-mono">
-                          <span className={isOverdue ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                            {formatDate(item.dueDate)}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-right font-mono font-bold text-white">
-                          {formatCurrency(item.amount)}
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
-                            item.status === 'paid' || item.status === 'received'
-                              ? 'bg-teal-950 text-teal-300 border-teal-800'
-                              : isOverdue
-                              ? 'bg-rose-950 text-rose-300 border-rose-800'
-                              : 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                          }`}>
-                            {item.status === 'paid' || item.status === 'received' ? 'Recebido' : isOverdue ? 'Vencido' : 'Em Aberto'}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-center">
-                          {item.status !== 'paid' && item.status !== 'received' && onUpdateReceivableStatus && (
+                const getPageNums = () => {
+                  const pages = []
+                  const max = 5
+                  if (totalPages <= max) {
+                    for (let i = 1; i <= totalPages; i++) pages.push(i)
+                  } else {
+                    let s = Math.max(1, safePage - 2)
+                    let e = Math.min(totalPages, s + max - 1)
+                    if (e - s < max - 1) s = Math.max(1, e - max + 1)
+                    for (let i = s; i <= e; i++) pages.push(i)
+                  }
+                  return pages
+                }
+
+                return (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-slate-400 uppercase font-semibold">
+                            <th className="py-3 px-3">Pedido / Doc</th>
+                            <th className="py-3 px-3">Cliente Comprador</th>
+                            <th className="py-3 px-3 text-center">Emissão</th>
+                            <th className="py-3 px-3 text-center">Vencimento</th>
+                            <th className="py-3 px-3 text-center">Prazo (Dias)</th>
+                            <th className="py-3 px-3 text-center">Status</th>
+                            <th className="py-3 px-3 text-right">Valor Nominal</th>
+                            <th className="py-3 px-3 text-right">Valor Recebido</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                          {paginated.map((rec) => {
+                            const isPaid = rec.status === 'paid' || rec.status === 'received'
+                            return (
+                              <tr key={rec.id} className="hover:bg-slate-800/40 transition-colors">
+                                <td className="py-3 px-3 font-mono font-semibold text-emerald-400">
+                                  {rec.orderNumber || rec.documentNumber || rec.id}
+                                </td>
+                                <td className="py-3 px-3">
+                                  <div className="font-semibold text-white">{rec.customer || rec.customerName || 'Cliente'}</div>
+                                  <div className="text-[11px] text-slate-400">{rec.description}</div>
+                                </td>
+                                <td className="py-3 px-3 text-center text-slate-400">{formatDate(rec.issueDate || rec.dueDate)}</td>
+                                <td className="py-3 px-3 text-center font-medium text-slate-300">{formatDate(rec.dueDate)}</td>
+                                <td className="py-3 px-3 text-center">
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                    {rec.daysTerm || 30} dias
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-center">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    isPaid
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                                  }`}>
+                                    {isPaid ? 'Liquidado' : 'Em Aberto'}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-right font-bold text-white">{formatCurrency(rec.amount)}</td>
+                                <td className="py-3 px-3 text-right font-bold text-emerald-300">
+                                  {formatCurrency(rec.amountPaid || (isPaid ? rec.amount : 0))}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Paginação da Tabela de Recebíveis */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800 text-xs">
+                      <div className="text-slate-400">
+                        Página <strong className="text-white">{safePage}</strong> de <strong className="text-white">{totalPages}</strong> • Exibindo {totalRec > 0 ? start + 1 : 0} a {end} de {totalRec} lançamentos
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(1)}
+                          disabled={safePage <= 1}
+                          className="p-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-400 hover:text-white disabled:opacity-40 transition-colors"
+                          title="Primeira página"
+                        >
+                          <ChevronsLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={safePage <= 1}
+                          className="p-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-400 hover:text-white disabled:opacity-40 transition-colors"
+                          title="Página anterior"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+
+                        <div className="flex items-center gap-1">
+                          {getPageNums().map((num) => (
                             <button
+                              key={num}
                               type="button"
-                              onClick={() => onUpdateReceivableStatus(item.id, 'paid')}
-                              className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[10px] font-bold shadow-sm transition-all"
+                              onClick={() => setCurrentPage(num)}
+                              className={`min-w-[32px] h-8 px-2 rounded-lg font-bold text-xs transition-all ${
+                                num === safePage
+                                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950/40 border border-emerald-500'
+                                  : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                              }`}
                             >
-                              Receber
+                              {num}
                             </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                          ))}
+                        </div>
 
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={safePage >= totalPages}
+                          className="p-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-400 hover:text-white disabled:opacity-40 transition-colors"
+                          title="Próxima página"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(totalPages)}
+                          disabled={safePage >= totalPages}
+                          className="p-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-400 hover:text-white disabled:opacity-40 transition-colors"
+                          title="Última página"
+                        >
+                          <ChevronsRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )
+              })()}
+            </>
+          )}
         </div>
       )}
 
-      {/* ABA 2: LISTA DE CLIENTES COMPRADORES */}
+      {/* Aba: Ranking de Clientes */}
       {activeTab === 'customers' && (
-        <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+        <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div>
-              <h2 className="text-base font-bold text-white tracking-tight">Carteira de Clientes Faturados</h2>
-              <p className="text-xs text-slate-400">Compradores de iluminação corporativa e industrial sincronizados via Bling API v3</p>
+              <h3 className="font-bold text-white text-base">Ranking de Clientes Compradores ({periodLabel})</h3>
+              <p className="text-xs text-slate-400">Total faturado, volume de compras e representatividade na receita</p>
             </div>
-            <span className="text-xs font-mono text-emerald-400 font-semibold">
-              {rawPessoas.length > 0 ? `${rawPessoas.length} clientes` : 'Clientes Ativos'}
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              {customerRanking.length} clientes compradores
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              {
-                nome: 'Construtora Horizonte Sul Ltda',
-                doc: '21.432.654/0001-99',
-                cidade: 'Curitiba, PR',
-                segmento: 'Construção Civil & Shopping Centers',
-                email: 'suprimentos@horizontesul.com.br'
-              },
-              {
-                nome: 'Iluminação & Design Projetos Arquitetônicos',
-                doc: '32.654.987/0001-11',
-                cidade: 'São Paulo, SP',
-                segmento: 'Distribuição e Iluminação Comercial',
-                email: 'compras@iluminacaodesign.com.br'
-              },
-              {
-                nome: 'Engenharia & Obras Paulistana Eireli',
-                doc: '43.876.123/0001-22',
-                cidade: 'Campinas, SP',
-                segmento: 'Galpões Logísticos e Indústria',
-                email: 'financeiro@obraspaulistana.com.br'
-              },
-              {
-                nome: 'Rede Varejo Center Lojas e Departamentos',
-                doc: '54.098.345/0001-33',
-                cidade: 'Belo Horizonte, MG',
-                segmento: 'Retrofit de Iluminação LED para Lojas',
-                email: 'contasapagar@redecenter.com.br'
-              }
-            ].map((cli, idx) => (
-              <div
-                key={idx}
-                className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2.5 hover:border-emerald-700/50 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="font-bold text-white text-xs">{cli.nome}</div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
-                    Bling v3
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-400 font-mono">{cli.doc}</div>
-                <div className="text-[11px] text-emerald-400 font-medium">{cli.segmento}</div>
-                <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-                  <span>{cli.cidade}</span>
-                  <span className="text-slate-500 font-mono text-[10px]">{cli.email}</span>
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 uppercase font-semibold">
+                  <th className="py-3 px-3 text-center">Posição</th>
+                  <th className="py-3 px-3">Cliente</th>
+                  <th className="py-3 px-3 text-center">Pedidos</th>
+                  <th className="py-3 px-3 text-right">Ticket Médio</th>
+                  <th className="py-3 px-3 text-right">Share (%)</th>
+                  <th className="py-3 px-3 text-right">Faturamento Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                {customerRanking.map((cust, idx) => (
+                  <tr key={cust.name} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3 px-3 text-center font-bold">
+                      <span className={`w-6 h-6 rounded-full inline-flex items-center justify-center text-xs ${
+                        idx === 0 ? 'bg-amber-500/20 text-amber-300 font-extrabold border border-amber-500/40' :
+                        idx === 1 ? 'bg-slate-300/20 text-slate-200 border border-slate-400/40' :
+                        idx === 2 ? 'bg-amber-700/20 text-amber-400 border border-amber-700/40' :
+                        'bg-slate-800 text-slate-400'
+                      }`}>
+                        {idx + 1}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <div className="font-bold text-white">{cust.name}</div>
+                      <div className="text-[11px] text-slate-400">{cust.document || 'Cliente Bling'}</div>
+                    </td>
+                    <td className="py-3 px-3 text-center font-semibold text-slate-300">{cust.ordersCount}</td>
+                    <td className="py-3 px-3 text-right font-medium text-slate-300">{formatCurrency(cust.ticketMedio)}</td>
+                    <td className="py-3 px-3 text-right font-bold text-cyan-400">{cust.sharePercent.toFixed(1)}%</td>
+                    <td className="py-3 px-3 text-right font-extrabold text-emerald-300">{formatCurrency(cust.totalAmount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Aba: Ranking de Produtos */}
+      {activeTab === 'products' && (
+        <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div>
+              <h3 className="font-bold text-white text-base">Produtos Líderes de Vendas ({periodLabel})</h3>
+              <p className="text-xs text-slate-400">Itens e linhas com maior volume de saída e faturamento gerado</p>
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+              {productRanking.length} produtos
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 uppercase font-semibold">
+                  <th className="py-3 px-3 text-center">Posição</th>
+                  <th className="py-3 px-3">Descrição do Produto</th>
+                  <th className="py-3 px-3 text-center">SKU / Código</th>
+                  <th className="py-3 px-3 text-center">Unidades</th>
+                  <th className="py-3 px-3 text-right">Preço Médio</th>
+                  <th className="py-3 px-3 text-right">Share (%)</th>
+                  <th className="py-3 px-3 text-right">Faturamento Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                {productRanking.map((prod, idx) => (
+                  <tr key={prod.description} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3 px-3 text-center font-bold">
+                      <span className={`w-6 h-6 rounded-full inline-flex items-center justify-center text-xs ${
+                        idx === 0 ? 'bg-cyan-500/20 text-cyan-300 font-extrabold border border-cyan-500/40' :
+                        'bg-slate-800 text-slate-400'
+                      }`}>
+                        {idx + 1}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 font-bold text-white">{prod.description}</td>
+                    <td className="py-3 px-3 text-center font-mono text-cyan-300 text-[11px]">{prod.code}</td>
+                    <td className="py-3 px-3 text-center font-semibold text-slate-300">{prod.quantity}</td>
+                    <td className="py-3 px-3 text-right font-medium text-slate-300">{formatCurrency(prod.unitAverage)}</td>
+                    <td className="py-3 px-3 text-right font-bold text-emerald-400">{prod.sharePercent.toFixed(1)}%</td>
+                    <td className="py-3 px-3 text-right font-extrabold text-cyan-300">{formatCurrency(prod.totalAmount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

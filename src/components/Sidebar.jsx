@@ -26,8 +26,19 @@ export function Sidebar({
   onCloseMobileMenu
 }) {
   const isLight = theme === 'light'
+  const isBrlumens = String(clientName || '').toLowerCase().includes('lumens') || String(clientName || '').toLowerCase().includes('comex')
 
-  const menuItems = [
+  const menuItems = isBrlumens ? [
+    { id: 'dashboard', label: `Visão Geral & Vendas`, icon: LayoutDashboard, badge: null },
+    {
+      id: 'customers',
+      label: 'Vendas & Recebíveis',
+      icon: TrendingUp,
+      badge: counts.receivablesCount || null,
+      badgeColor: isLight ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300'
+    },
+    { id: 'settings', label: 'Configurações Bling', icon: Settings, badge: null }
+  ] : [
     { id: 'dashboard', label: `Visão Geral (${clientName})`, icon: LayoutDashboard, badge: null },
     {
       id: 'suppliers',
