@@ -53,7 +53,8 @@ import {
   syncRealBlingData,
   refreshBlingAccessToken,
   checkAndAutoRenewBlingToken,
-  getBlingTokenExpirationInfo
+  getBlingTokenExpirationInfo,
+  BR_LUMENS_CATALOG_PRODUCTS
 } from './services/blingService'
 import { RefreshCw } from 'lucide-react'
 
@@ -665,7 +666,10 @@ export function App() {
   const counts = {
     pendingPayables: payables.filter(p => p.status === 'pending_client' || p.status === 'scheduled').length,
     receivablesCount: receivables.length,
-    pendingReconciliation: transactions.filter(t => !t.isReconciled).length
+    pendingReconciliation: transactions.filter(t => !t.isReconciled).length,
+    ruptureCount: BR_LUMENS_CATALOG_PRODUCTS.filter(p => p.currentStock === 0).length,
+    totalSkus: BR_LUMENS_CATALOG_PRODUCTS.length,
+    totalPhysicalUnits: BR_LUMENS_CATALOG_PRODUCTS.reduce((acc, p) => acc + (p.currentStock || 0), 0)
   }
 
   // ===========================================================================
@@ -876,9 +880,9 @@ export function App() {
 
       {/* Toast Notification */}
       {syncToast && (
-        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-cyan-950 border border-cyan-700 text-white text-xs font-semibold shadow-2xl animate-in slide-in-from-bottom-5 flex items-center gap-2.5">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-          <span>{syncToast}</span>
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl text-xs font-semibold shadow-2xl animate-in slide-in-from-bottom-5 flex items-center gap-3 border bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-900/10">
+          <span className="w-2.5 h-2.5 rounded-full bg-cyan-600 dark:bg-cyan-400 animate-ping flex-shrink-0" />
+          <span className="text-slate-800 dark:text-slate-100 font-medium">{syncToast}</span>
         </div>
       )}
 
@@ -915,8 +919,8 @@ export function App() {
           ) : (
             /* MODO BPO AMICI */
             <>
-              {/* 1. VISÃO GERAL / DASHBOARD */}
-              {activeTab === 'dashboard' && (
+              {/* 1. VISÃO GERAL / DASHBOARD & ESTOQUE */}
+              {(activeTab === 'dashboard' || activeTab === 'products' || activeTab === 'stock') && (
                 isBlingClient(selectedClient) ? (
                   <BrlumensDashboardView
                     clients={[selectedClient]}
@@ -925,6 +929,7 @@ export function App() {
                     selectedClientId={selectedClient.id}
                     onSelectClient={() => {}}
                     onNavigateTab={setActiveTab}
+                    initialSection={activeTab === 'products' || activeTab === 'stock' ? 'products' : 'overview'}
                   />
                 ) : (
                   <DashboardView

@@ -11,7 +11,9 @@ import {
   ArrowLeft,
   Sun,
   Moon,
-  X
+  X,
+  Package,
+  Boxes
 } from 'lucide-react'
 
 export function Sidebar({
@@ -30,6 +32,15 @@ export function Sidebar({
 
   const menuItems = isBrlumens ? [
     { id: 'dashboard', label: `Visão Geral & Vendas`, icon: LayoutDashboard, badge: null },
+    {
+      id: 'products',
+      label: 'Estoque & Ruptura',
+      icon: Package,
+      badge: counts.ruptureCount ? `${counts.ruptureCount} ruptura(s)` : `${counts.totalPhysicalUnits ? counts.totalPhysicalUnits.toLocaleString('pt-BR') + ' un' : 'Estoque'}`,
+      badgeColor: counts.ruptureCount
+        ? (isLight ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-rose-500/20 text-rose-300 border-rose-500/40')
+        : (isLight ? 'bg-cyan-100 text-cyan-800 border-cyan-300' : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40')
+    },
     {
       id: 'customers',
       label: 'Vendas & Recebíveis',

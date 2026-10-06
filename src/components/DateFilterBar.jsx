@@ -90,14 +90,14 @@ export function DateFilterBar({
 
           {/* Campo Data Início */}
           <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 hover:border-emerald-500/60 focus-within:border-emerald-500 rounded-2xl px-3 py-2 shadow-inner transition-colors">
-            <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
+            <Calendar className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Data Início</span>
               <input
                 type="date"
                 value={startDate || ''}
                 onChange={(e) => updateStartDate(e.target.value)}
-                className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer [color-scheme:dark]"
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-white focus:outline-none cursor-pointer"
               />
             </div>
           </div>
@@ -108,14 +108,14 @@ export function DateFilterBar({
 
           {/* Campo Data Fim */}
           <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 hover:border-emerald-500/60 focus-within:border-emerald-500 rounded-2xl px-3 py-2 shadow-inner transition-colors">
-            <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
+            <Calendar className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Data Fim</span>
               <input
                 type="date"
                 value={endDate || ''}
                 onChange={(e) => updateEndDate(e.target.value)}
-                className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer [color-scheme:dark]"
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-white focus:outline-none cursor-pointer"
               />
             </div>
           </div>

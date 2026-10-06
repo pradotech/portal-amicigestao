@@ -523,14 +523,14 @@ export async function fetchReceivablesFromSupabase(clientId) {
         mappedStatus = 'today'
       }
 
-      let daysTerm = 30
+      let daysTerm = 44
       if (r.created_at && r.due_date) {
         try {
           const dCreate = new Date(r.created_at.split('T')[0])
           const dDue = new Date(r.due_date)
-          daysTerm = Math.max(0, Math.round((dDue - dCreate) / (1000 * 60 * 60 * 24))) || 30
+          daysTerm = Math.max(0, Math.round((dDue - dCreate) / (1000 * 60 * 60 * 24))) || 44
         } catch (e) {
-          daysTerm = 30
+          daysTerm = 44
         }
       }
 
