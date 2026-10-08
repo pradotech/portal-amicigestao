@@ -12,8 +12,8 @@ export const BLING_REDIRECT_URI = import.meta.env.VITE_BLING_REDIRECT_URI || 'ht
 export const BLING_AUTH_URL = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${BLING_CLIENT_ID}&state=amici_brlumens_comex`
 
 // Credenciais HGE Iluminação (Grupo BR Lumens)
-export const HGE_CLIENT_ID = import.meta.env.VITE_HGE_CLIENT_ID || '2d98294f0948441772adcf71ab82abdbf27d1594'
-export const HGE_CLIENT_SECRET = import.meta.env.VITE_HGE_CLIENT_SECRET || '665a5c85ef01e9ee550484c5abdad2ca71a9e00955fda1d9c0093b323630'
+export const HGE_CLIENT_ID = import.meta.env.VITE_HGE_CLIENT_ID || '472b991e2e8ba4f9b23b702f47e52dfce41edca3'
+export const HGE_CLIENT_SECRET = import.meta.env.VITE_HGE_CLIENT_SECRET || 'b1b2af184d32af5d99b1365c977c8752d833077b6734b1aaf7411529621a'
 export const HGE_AUTH_URL = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${HGE_CLIENT_ID}&state=amici_hge_iluminacao`
 
 export function getBlingConfig(clientId = 'br-lumens') {
@@ -27,9 +27,14 @@ export function getBlingConfig(clientId = 'br-lumens') {
     const saved = localStorage.getItem(`${BLING_STORAGE_KEY}_${clientId}`)
     if (saved) {
       const parsed = JSON.parse(saved)
-      if (isHge && (parsed.clientId === '472b991e2e8ba4f9b23b702f47e52dfce41edca3' || !parsed.clientId)) {
+      if (isHge && (parsed.clientId !== HGE_CLIENT_ID || parsed.clientSecret !== HGE_CLIENT_SECRET)) {
         parsed.clientId = defaultClientId
         parsed.clientSecret = defaultClientSecret
+        // Se o token antigo pertencia ao BR Lumens, zera para exigir autorização com a conta HGE
+        parsed.accessToken = ''
+        parsed.refreshToken = ''
+        parsed.status = 'disconnected'
+        parsed.lastSync = 'Requer autorização com a conta do HGE'
         localStorage.setItem(`${BLING_STORAGE_KEY}_${clientId}`, JSON.stringify(parsed))
       }
       return parsed
