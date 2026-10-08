@@ -292,10 +292,25 @@ export const BLING_INITIAL_PAYABLES = []
 export const BLING_INITIAL_RECEIVABLES = []
 export const BLING_INITIAL_COUNTERPARTIES = []
 
+// Rate limiter global: a API do Bling ERP v3 aceita no máximo 3 requisições por segundo.
+// Mantemos intervalo de segurança de 380ms (~2.6 req/s) para evitar erros 429.
+let lastBlingRequestTime = 0
+const MIN_BLING_INTERVAL_MS = 380
+
+async function throttleBlingRateLimit() {
+  const now = Date.now()
+  const elapsed = now - lastBlingRequestTime
+  if (elapsed < MIN_BLING_INTERVAL_MS) {
+    const delay = MIN_BLING_INTERVAL_MS - elapsed
+    await new Promise(r => setTimeout(r, delay))
+  }
+  lastBlingRequestTime = Date.now()
+}
+
 /**
- * Helper de requisição resiliente com Proxy anti-CORS (/api-bling) e renovação automática de token
+ * Helper de requisição resiliente com Proxy anti-CORS (/api-bling), rate limiter e renovação automática de token
  */
-async function fetchBlingApi(endpoint, apiKeyOrAccount, options = {}) {
+async function fetchBlingApi(endpoint, apiKeyOrAccount, options = {}, retryCount = 0) {
   let token = ''
   let accountKey = 'br-lumens'
 
@@ -323,18 +338,30 @@ async function fetchBlingApi(endpoint, apiKeyOrAccount, options = {}) {
   const primaryUrl = `/api-bling${cleanEndpoint}`
 
   try {
+    // Garante espaçamento mínimo entre chamadas para nunca estourar o limite de 3 req/segundo do Bling
+    await throttleBlingRateLimit()
+
     let res = await fetch(primaryUrl, {
       ...options,
       headers
     })
 
+    // Se receber 429 (Too Many Requests / limite atingido), aguarda e retenta automaticamente
+    if (res.status === 429 && retryCount < 3) {
+      const waitMs = 1200 * (retryCount + 1)
+      console.warn(`[Bling API - ${accountKey}] Rate limit 429 em ${cleanEndpoint}. Aguardando ${waitMs}ms para retentar (${retryCount + 1}/3)...`)
+      await new Promise(r => setTimeout(r, waitMs))
+      return fetchBlingApi(endpoint, apiKeyOrAccount, options, retryCount + 1)
+    }
+
     // Se receber 401 (token expirado ou não autorizado), renova automaticamente via Refresh Token e repete
-    if (!res.ok && res.status === 401) {
+    if (!res.ok && res.status === 401 && retryCount < 2) {
       console.log(`🔄 Bling ERP (${accountKey}): Token expirado (401). Executando auto-renovação transparente via OAuth2 Refresh Token...`)
       const refreshed = await refreshBlingAccessToken(accountKey)
       if (refreshed && refreshed.success && refreshed.accessToken) {
         token = refreshed.accessToken
         headers['Authorization'] = `Bearer ${token}`
+        await throttleBlingRateLimit()
         res = await fetch(primaryUrl, {
           ...options,
           headers
@@ -835,66 +862,74 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
   const clientId = targetClient?.id || 'd0000000-0000-0000-0000-000000000002'
   const todayStr = new Date().toISOString().split('T')[0]
 
+  const isHge = targetClient?.id === 'hge-iluminacao' || 
+                String(targetClient?.id || '').toLowerCase().includes('hge') || 
+                String(targetClient?.tradeName || '').toLowerCase().includes('hge')
+  const primaryAccount = isHge ? 'hge-iluminacao' : 'br-lumens'
+
   onProgress({ step: 'init', message: `Conectando à API v3 do Bling ERP de ${clientTradeName}...`, progress: 10 })
-  await new Promise(r => setTimeout(r, 150))
-
-  onProgress({ step: 'auth', message: `Verificando credenciais OAuth e token da BR Lumens...`, progress: 20 })
-  await new Promise(r => setTimeout(r, 150))
-
-  onProgress({ step: 'orders', message: `Puxando histórico de pedidos de venda e faturamento (/v3/pedidos/vendas)...`, progress: 35 })
-  const livePedidosRaw = await fetchBlingPedidosVendas()
   await new Promise(r => setTimeout(r, 100))
 
-  // Busca itens detalhados de pedidos na API Bling com controle de concorrência
+  onProgress({ step: 'auth', message: `Verificando credenciais OAuth e token de ${clientTradeName}...`, progress: 20 })
+  await new Promise(r => setTimeout(r, 100))
+
+  onProgress({ step: 'orders', message: `Puxando histórico de pedidos de venda e faturamento (/v3/pedidos/vendas)...`, progress: 35 })
+  const livePedidosRaw = await fetchBlingPedidosVendas(primaryAccount)
+  await new Promise(r => setTimeout(r, 100))
+
+  // Busca itens detalhados de pedidos na API Bling com controle de taxa e sem rajadas
   onProgress({ step: 'orders_items', message: `Carregando itens de produtos e SKUs dos pedidos...`, progress: 42 })
   const livePedidos = []
-  const orderBatchSize = 6
-  for (let i = 0; i < (livePedidosRaw || []).length; i += orderBatchSize) {
-    const chunk = livePedidosRaw.slice(i, i + orderBatchSize)
-    const chunkResults = await Promise.all(chunk.map(async (ped) => {
-      try {
-        const detail = await fetchBlingPedidoDetalhes(ped.id)
-        if (detail) {
-          return {
-            ...ped,
-            ...detail,
-            itens: (detail.itens && detail.itens.length > 0) ? detail.itens : ped.itens,
-            parcelas: detail.parcelas || detail.pagamento?.parcelas || ped.parcelas,
-            pagamento: detail.pagamento || ped.pagamento,
-            condicao: detail.condicao || detail.pagamento?.condicao || ped.condicao
-          }
-        }
-      } catch (err) {
-        // Fallback silencioso
+  const allOrdersList = Array.isArray(livePedidosRaw) ? livePedidosRaw : []
+  // Consulta detalhes somente dos 25 pedidos mais recentes que não tiverem itens
+  const ordersToFetchDetails = allOrdersList.slice(0, 25)
+  const remainingOrders = allOrdersList.slice(25)
+
+  for (const ped of ordersToFetchDetails) {
+    if (ped.itens && Array.isArray(ped.itens) && ped.itens.length > 0) {
+      livePedidos.push(ped)
+      continue
+    }
+    try {
+      const detail = await fetchBlingPedidoDetalhes(ped.id, primaryAccount)
+      if (detail) {
+        livePedidos.push({
+          ...ped,
+          ...detail,
+          itens: (detail.itens && detail.itens.length > 0) ? detail.itens : ped.itens,
+          parcelas: detail.parcelas || detail.pagamento?.parcelas || ped.parcelas,
+          pagamento: detail.pagamento || ped.pagamento,
+          condicao: detail.condicao || detail.pagamento?.condicao || ped.condicao
+        })
+      } else {
+        livePedidos.push(ped)
       }
-      return ped
-    }))
-    livePedidos.push(...chunkResults)
-    if (i + orderBatchSize < livePedidosRaw.length) {
-      await new Promise(r => setTimeout(r, 120))
+    } catch (err) {
+      livePedidos.push(ped)
     }
   }
+  livePedidos.push(...remainingOrders)
 
   onProgress({ step: 'nfe', message: `Puxando notas fiscais eletrônicas emitidas (/v3/nfe)...`, progress: 55 })
-  const liveNfes = await fetchBlingNotasFiscais()
+  const liveNfes = await fetchBlingNotasFiscais(primaryAccount)
   await new Promise(r => setTimeout(r, 100))
 
   onProgress({ step: 'receivables', message: `Importando contas a receber e parcelas (/v3/contas/receber)...`, progress: 68 })
-  const liveReceivables = await fetchBlingContasReceber()
+  const liveReceivables = await fetchBlingContasReceber(primaryAccount)
   await new Promise(r => setTimeout(r, 100))
 
   onProgress({ step: 'contacts', message: `Carregando parceiros comerciais e clientes (/v3/contatos)...`, progress: 80 })
-  const liveContatos = await fetchBlingContatos()
+  const liveContatos = await fetchBlingContatos(primaryAccount)
   await new Promise(r => setTimeout(r, 100))
 
   onProgress({ step: 'products', message: `Carregando catálogo e produtos (/v3/produtos)...`, progress: 90 })
-  const liveProdutos = await fetchBlingProdutos()
+  const liveProdutos = await fetchBlingProdutos(primaryAccount)
   await new Promise(r => setTimeout(r, 100))
 
   onProgress({ step: 'mapping', message: `Processando inteligência de vendas, PMR e ticket médio...`, progress: 95 })
 
   // 1. Mapeamento de Contas a Pagar (Standby)
-  const livePayables = await fetchBlingContasPagar()
+  const livePayables = await fetchBlingContasPagar(primaryAccount)
   const validLivePayables = (livePayables || []).filter(p => !parseBlingSituacao(p.situacao).isCanceled)
 
   const mappedPayables = validLivePayables.map((p, idx) => {
@@ -1104,22 +1139,20 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
     }
   })
 
-  // 4. Integração Simultânea com a API Bling da HGE Iluminação
+  // 4. Integração com a API Bling da HGE Iluminação (apenas se a conta primária for BR Lumens)
   const hgeConfig = getBlingConfig('hge-iluminacao')
   const hasHgeToken = Boolean(hgeConfig.accessToken || hgeConfig.refreshToken)
   const hgePayables = []
   const hgeReceivables = []
   const hgeInvoices = []
 
-  if (hasHgeToken) {
+  if (!isHge && hasHgeToken) {
     try {
       onProgress({ step: 'hge', message: 'Sincronizando faturamento e títulos da HGE Iluminação...', progress: 96 })
-      const [hgePedRaw, hgeNfesRaw, hgeRecRaw, hgePayRaw] = await Promise.all([
-        fetchBlingPedidosVendas('hge-iluminacao'),
-        fetchBlingNotasFiscais('hge-iluminacao'),
-        fetchBlingContasReceber('hge-iluminacao'),
-        fetchBlingContasPagar('hge-iluminacao')
-      ])
+      const hgePedRaw = await fetchBlingPedidosVendas('hge-iluminacao')
+      const hgeNfesRaw = await fetchBlingNotasFiscais('hge-iluminacao')
+      const hgeRecRaw = await fetchBlingContasReceber('hge-iluminacao')
+      const hgePayRaw = await fetchBlingContasPagar('hge-iluminacao')
 
       // Mapeia contas a pagar HGE
       if (Array.isArray(hgePayRaw) && hgePayRaw.length > 0) {
@@ -1210,13 +1243,14 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
     }
   }
 
-  const finalPayables = [...mappedPayables.map(p => ({ ...p, companySource: 'BR Lumens' })), ...hgePayables]
-  const finalReceivables = [...Array.from(combinedReceivablesMap.values()).map(r => ({ ...r, companySource: r.companySource || 'BR Lumens' })), ...hgeReceivables]
-  const finalInvoices = [...mappedInvoices, ...hgeInvoices]
+  const primarySourceName = isHge ? 'HGE Iluminação' : 'BR Lumens'
+  const finalPayables = [...mappedPayables.map(p => ({ ...p, companySource: p.companySource || primarySourceName })), ...hgePayables]
+  const finalReceivables = [...Array.from(combinedReceivablesMap.values()).map(r => ({ ...r, companySource: r.companySource || primarySourceName })), ...hgeReceivables]
+  const finalInvoices = [...mappedInvoices.map(i => ({ ...i, companySource: i.companySource || primarySourceName })), ...hgeInvoices]
   const finalContatos = liveContatos || []
   const finalProdutos = liveProdutos || []
 
-  onProgress({ step: 'done', message: `✓ Dados de BR Lumens e HGE Iluminação sincronizados via Bling API v3!`, progress: 100 })
+  onProgress({ step: 'done', message: `✓ Dados de ${clientTradeName} sincronizados via Bling API v3!`, progress: 100 })
 
   return {
     success: true,
