@@ -355,6 +355,37 @@ export async function fetchClientsFromSupabase() {
 
 export const INITIAL_PAYABLES = []
 
+// Helper para buscar todos os registros com paginação contornando o limite de 1000 linhas do Supabase/PostgREST
+async function fetchAllRowsFromSupabase(supabase, table, clientId, orderField = 'due_date', ascending = true) {
+  let allRows = []
+  let from = 0
+  const step = 1000
+  while (true) {
+    let query = supabase
+      .from(table)
+      .select('*')
+      .range(from, from + step - 1)
+
+    if (clientId) {
+      query = query.eq('client_id', clientId)
+    }
+    if (orderField) {
+      query = query.order(orderField, { ascending })
+    }
+
+    const { data, error } = await query
+    if (error) {
+      console.warn(`[Supabase] Erro ao buscar lote ${from}-${from + step} de ${table}:`, error.message)
+      break
+    }
+    if (!data || data.length === 0) break
+    allRows = allRows.concat(data)
+    if (data.length < step) break
+    from += step
+  }
+  return allRows
+}
+
 export async function fetchPayablesFromSupabase(clientId) {
   const supabase = getSupabaseClient()
   if (!supabase) return []
@@ -366,14 +397,9 @@ export async function fetchPayablesFromSupabase(clientId) {
     const isUuid = rawId.includes('-') && rawId.length === 36
     const resolvedClientId = isUuid ? rawId : 'd0000000-0000-0000-0000-000000000001'
 
-    const { data, error } = await supabase
-      .from('payables')
-      .select('*')
-      .eq('client_id', resolvedClientId)
-      .order('due_date', { ascending: true })
-      .limit(10000)
+    const data = await fetchAllRowsFromSupabase(supabase, 'payables', resolvedClientId, 'due_date', true)
 
-    if (error || !data || data.length === 0) {
+    if (!data || data.length === 0) {
       return []
     }
 
@@ -499,14 +525,9 @@ export async function fetchReceivablesFromSupabase(clientId) {
     const isUuid = rawId.includes('-') && rawId.length === 36
     const resolvedClientId = isUuid ? rawId : 'd0000000-0000-0000-0000-000000000001'
 
-    const { data, error } = await supabase
-      .from('receivables')
-      .select('*')
-      .eq('client_id', resolvedClientId)
-      .order('due_date', { ascending: true })
-      .limit(10000)
+    const data = await fetchAllRowsFromSupabase(supabase, 'receivables', resolvedClientId, 'due_date', true)
 
-    if (error || !data || data.length === 0) {
+    if (!data || data.length === 0) {
       return []
     }
 
