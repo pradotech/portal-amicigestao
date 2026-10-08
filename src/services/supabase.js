@@ -371,6 +371,7 @@ export async function fetchPayablesFromSupabase(clientId) {
       .select('*')
       .eq('client_id', resolvedClientId)
       .order('due_date', { ascending: true })
+      .limit(10000)
 
     if (error || !data || data.length === 0) {
       return []
@@ -503,6 +504,7 @@ export async function fetchReceivablesFromSupabase(clientId) {
       .select('*')
       .eq('client_id', resolvedClientId)
       .order('due_date', { ascending: true })
+      .limit(10000)
 
     if (error || !data || data.length === 0) {
       return []
@@ -946,56 +948,96 @@ export async function persistBlingSyncToSupabase(clientId, syncData) {
       }
     }
 
+    const todayStr = new Date().toISOString().split('T')[0]
+
     // b) Salvar Contas a Pagar do Bling no Supabase
     if (syncData.payables && syncData.payables.length > 0) {
       try {
-        const payablesPayload = syncData.payables.map(p => ({
-          client_id: resolvedClientId,
-          ca_payable_id: String(p.id),
-          supplier_name: p.supplier || 'Fornecedor Bling',
-          category_name: p.category || 'Importação & Frete',
-          description: p.description || `Pagamento - ${p.supplier || 'Bling'}`,
-          amount: Number(p.amount || 0),
-          paid_amount: Number(p.amountPaid || 0),
-          due_date: p.dueDate,
-          status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
-          barcode: p.barcode || p.barCode || null,
-          notes: p.companySource ? `Empresa: ${p.companySource}` : 'Sincronizado via Bling ERP v3'
-        }))
+        const payablesPayload = syncData.payables.map(p => {
+          const rawAmt = Number(p.amount || 0)
+          const rawPaid = Number(p.amountPaid || 0)
+          let cleanDue = todayStr
+          if (p.dueDate && typeof p.dueDate === 'string' && p.dueDate.length >= 10) {
+            cleanDue = p.dueDate.slice(0, 10)
+          }
+
+          return {
+            client_id: resolvedClientId,
+            ca_payable_id: String(p.id),
+            supplier_name: p.supplier || 'Fornecedor Bling',
+            category_name: p.category || 'Importação & Frete',
+            description: p.description || `Pagamento - ${p.supplier || 'Bling'}`,
+            amount: isNaN(rawAmt) ? 0 : rawAmt,
+            paid_amount: isNaN(rawPaid) ? 0 : rawPaid,
+            due_date: cleanDue,
+            status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
+            barcode: p.barcode || p.barCode || null,
+            notes: p.companySource ? `Empresa: ${p.companySource}` : 'Sincronizado via Bling ERP v3'
+          }
+        })
 
         // Limpeza atômica dos registros anteriores da BR Lumens
         await supabase.from('payables').delete().eq('client_id', resolvedClientId)
-        const { error: insPayErr } = await supabase.from('payables').insert(payablesPayload)
-        if (insPayErr) {
-          console.warn('Aviso ao inserir payables do Bling no Supabase:', insPayErr.message)
+
+        // Particiona em lotes seguros de 100 registros para evitar estouro de limite do Supabase
+        const CHUNK_SIZE = 100
+        for (let i = 0; i < payablesPayload.length; i += CHUNK_SIZE) {
+          const chunk = payablesPayload.slice(i, i + CHUNK_SIZE)
+          const { error: insPayErr } = await supabase.from('payables').insert(chunk)
+          if (insPayErr) {
+            console.warn(`[Supabase Sync] Aviso ao persistir lote ${i}-${i + CHUNK_SIZE} de payables:`, insPayErr.message)
+          }
         }
+        console.log(`[Supabase Sync] ✓ ${payablesPayload.length} contas a pagar persistidas no Supabase.`)
       } catch (err) {
         console.warn('Erro ao salvar payables do Bling:', err)
       }
     }
 
-    // c) Salvar Contas a Receber do Bling no Supabase
+    // c) Salvar Contas a Receber e Pedidos do Bling no Supabase
     if (syncData.receivables && syncData.receivables.length > 0) {
       try {
-        const receivablesPayload = syncData.receivables.map(r => ({
-          client_id: resolvedClientId,
-          ca_receivable_id: String(r.id),
-          customer_name: r.customer || 'Cliente Bling',
-          description: `[Empresa: ${r.companySource || 'BR Lumens'}] [Emissao: ${r.issueDate || r.dueDate}] [Tipo: ${r.recordType || (String(r.id).includes('-ped-') ? 'order' : 'receivable')}] ${r.description || `Recebimento - ${r.customer || 'Bling'}`}`,
-          amount: Number(r.amount || 0),
-          received_amount: Number(r.amountPaid || 0),
-          due_date: r.dueDate,
-          status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
-          payment_method: r.paymentMethod || 'boleto',
-          invoice_number: r.invoiceNumber || null
-        }))
+        const receivablesPayload = syncData.receivables.map(r => {
+          const rawAmt = Number(r.amount || 0)
+          const rawPaid = Number(r.amountPaid || 0)
+          let cleanDue = todayStr
+          if (r.dueDate && typeof r.dueDate === 'string' && r.dueDate.length >= 10) {
+            cleanDue = r.dueDate.slice(0, 10)
+          }
+
+          let cleanIssue = cleanDue
+          if (r.issueDate && typeof r.issueDate === 'string' && r.issueDate.length >= 10) {
+            cleanIssue = r.issueDate.slice(0, 10)
+          }
+
+          return {
+            client_id: resolvedClientId,
+            ca_receivable_id: String(r.id),
+            customer_name: r.customer || r.customerName || 'Cliente Bling',
+            category_name: r.category || 'Venda de Iluminação LED',
+            description: `[Empresa: ${r.companySource || 'BR Lumens'}] [Emissao: ${cleanIssue}] [Tipo: ${r.recordType || (String(r.id).includes('-ped-') ? 'order' : 'receivable')}] ${r.description || `Recebimento - ${r.customer || 'Bling'}`}`,
+            amount: isNaN(rawAmt) ? 0 : rawAmt,
+            received_amount: isNaN(rawPaid) ? 0 : rawPaid,
+            due_date: cleanDue,
+            status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
+            payment_method: r.paymentMethod || 'boleto',
+            invoice_number: r.invoiceNumber ? String(r.invoiceNumber) : null
+          }
+        })
 
         // Limpeza atômica dos registros anteriores da BR Lumens
         await supabase.from('receivables').delete().eq('client_id', resolvedClientId)
-        const { error: insRecErr } = await supabase.from('receivables').insert(receivablesPayload)
-        if (insRecErr) {
-          console.warn('Aviso ao inserir receivables do Bling no Supabase:', insRecErr.message)
+
+        // Particiona em lotes seguros de 100 registros para evitar estouro de limite do Supabase
+        const CHUNK_SIZE = 100
+        for (let i = 0; i < receivablesPayload.length; i += CHUNK_SIZE) {
+          const chunk = receivablesPayload.slice(i, i + CHUNK_SIZE)
+          const { error: insRecErr } = await supabase.from('receivables').insert(chunk)
+          if (insRecErr) {
+            console.warn(`[Supabase Sync] Aviso ao persistir lote ${i}-${i + CHUNK_SIZE} de receivables:`, insRecErr.message)
+          }
         }
+        console.log(`[Supabase Sync] ✓ ${receivablesPayload.length} vendas e recebíveis persistidos no Supabase.`)
       } catch (err) {
         console.warn('Erro ao salvar receivables do Bling:', err)
       }

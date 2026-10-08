@@ -407,11 +407,12 @@ export function App() {
       ])
 
       if (isBling) {
-        // Se a BR Lumens no Supabase ainda estiver vazia, sincroniza automaticamente com a API do Bling
-        if ((!supaReceivables || supaReceivables.length === 0) && (!supaPayables || supaPayables.length === 0)) {
-          setPayables([])
+        // Se os recebíveis da BR Lumens ainda não estiverem persistidos no Supabase, sincroniza automaticamente
+        if (!supaReceivables || supaReceivables.length === 0 || !supaPayables || supaPayables.length === 0) {
+          console.log('🔄 Dados do Bling não encontrados no Supabase. Sincronizando automaticamente com a API...')
+          setPayables(supaPayables || [])
           setReceivables([])
-          // Dispara primeira sincronização com o Bling ERP
+          // Dispara sincronização com o Bling ERP
           handleSyncApi(currentClient)
           return
         }
