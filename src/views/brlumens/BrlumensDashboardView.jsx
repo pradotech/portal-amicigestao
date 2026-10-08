@@ -119,8 +119,19 @@ export function BrlumensDashboardView({
     filterByDate
   } = dateFilter
 
-  // Alternador de Contas Bling: 'all' (Consolidado) | 'brlumens' (BR Lumens) | 'hge' (HGE Iluminação)
-  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState('all')
+  // Alternador de Contas Bling: respeita a empresa selecionada no cliente ativo
+  const defaultCompanyFilter = useMemo(() => {
+    const name = String(currentClient?.tradeName || currentClient?.name || '').toLowerCase()
+    if (name.includes('hge')) return 'hge'
+    return 'brlumens'
+  }, [currentClient])
+
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState(defaultCompanyFilter)
+
+  // Sincroniza o alternador quando o cliente selecionado na barra lateral mudar
+  useEffect(() => {
+    setSelectedCompanyFilter(defaultCompanyFilter)
+  }, [defaultCompanyFilter])
 
   // Isolamento de títulos das empresas do grupo (BR Lumens e HGE Iluminação)
   const allBrlumensReceivables = useMemo(() => {
@@ -129,25 +140,25 @@ export function BrlumensDashboardView({
         !r.clientId || 
         r.clientId === 'd0000000-0000-0000-0000-000000000002' ||
         r.erpProvider === 'Bling ERP v3' ||
-        String(r.id).startsWith('bling-')
+        String(r.id).startsWith('bling-') ||
+        String(r.id).startsWith('hge-')
       )
       .map(r => {
-        const pTerms = extractOrderPaymentTerms(r, r.issueDate || r.created_at)
+        const pTerms = extractOrderPaymentTerms(r, r.issueDate || r.dueDate)
+        const isHge = r.companySource === 'HGE Iluminação' ||
+          (r.notes && r.notes.includes('HGE')) ||
+          (r.description && r.description.includes('HGE')) ||
+          (r.customer && r.customer.includes('HGE')) ||
+          (r.customerName && r.customerName.includes('HGE')) ||
+          String(r.id).includes('hge') ||
+          String(r.category || '').includes('HGE')
+
         return {
           ...r,
           daysTerm: r.daysTerm || pTerms.daysTerm || 44,
           paymentTerms: r.paymentTerms || pTerms.condicao || '29 44 59',
           parcelas: r.parcelas && r.parcelas.length > 0 ? r.parcelas : (pTerms.parcelas || []),
-          companySource: r.companySource || (
-            (r.notes && r.notes.includes('HGE')) ||
-            (r.description && r.description.includes('HGE')) ||
-            (r.customer && r.customer.includes('HGE')) ||
-            (r.customerName && r.customerName.includes('HGE')) ||
-            String(r.id).includes('hge') ||
-            String(r.category || '').includes('HGE')
-              ? 'HGE Iluminação'
-              : 'BR Lumens'
-          )
+          companySource: isHge ? 'HGE Iluminação' : 'BR Lumens'
         }
       })
   }, [receivables])
@@ -164,12 +175,12 @@ export function BrlumensDashboardView({
   }, [allBrlumensReceivables, selectedCompanyFilter])
 
   // Base de vendas do Dashboard: Pedidos de Venda da empresa
-  // Se existirem pedidos de venda (recordType === 'order' ou id começa com 'bling-ped-'),
-  // utilizamos os pedidos de venda para não duplicar com duplicatas/parcelas de contas a receber!
+  // Se existirem pedidos de venda (recordType === 'order' ou id contém '-ped-'),
+  // utilizamos estritamente os pedidos de venda para não duplicar com duplicatas/parcelas de contas a receber!
   const salesOrders = useMemo(() => {
     const orders = filteredByCompanyReceivables.filter(r => 
       r.recordType === 'order' || 
-      String(r.id).startsWith('bling-ped-') ||
+      String(r.id).includes('-ped-') ||
       (r.description && r.description.toLowerCase().includes('pedido de venda'))
     )
     if (orders.length > 0) return orders
@@ -500,7 +511,7 @@ export function BrlumensDashboardView({
       percentOfMax: (h.total / maxTotal) * 100,
       percentOfMaxOrders: (h.ordersCount / maxOrders) * 100
     }))
-  }, [filteredByCompanyReceivables, selectedYear])
+  }, [salesOrders, selectedYear])
 
   // =========================================================================
   // 6. MODAL DE DRILL-DOWN
@@ -815,7 +826,7 @@ export function BrlumensDashboardView({
           {/* Cards de Indicadores Principais */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
-            {/* Card 1: Valor Total de Vendas */}
+            {/* Card 1: Faturamento Realizado / Atendido (Oficial Bling) */}
             <div
               onClick={() => handleOpenDetail('faturamento')}
               className="group cursor-pointer p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/60 hover:bg-slate-50 dark:hover:bg-slate-850/90 transition-all duration-200 shadow-sm dark:shadow-xl hover:shadow-emerald-500/10 hover:scale-[1.015] relative overflow-hidden flex flex-col justify-between min-h-[160px]"
@@ -823,30 +834,30 @@ export function BrlumensDashboardView({
               <div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                    Valor Total de Vendas
+                    Faturamento Realizado (Atendido)
                   </span>
                   <span className="shrink-0 p-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-500/20 group-hover:scale-110 transition-all">
                     <TrendingUp className="w-4 h-4" />
                   </span>
                 </div>
                 <div className="mt-2">
-                  <div className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors break-words">
-                    {formatCurrency(periodMetrics.totalGeralPeriodo)}
+                  <div className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 tracking-tight transition-colors break-words">
+                    {formatCurrency(periodMetrics.totalFaturado)}
                   </div>
                 </div>
               </div>
 
               <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-1.5">
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 gap-1.5">
-                  <span>Atendido: {formatCurrency(periodMetrics.totalFaturado)} ({periodMetrics.atendidosCount} ped.)</span>
+                  <span>Total Pedidos: {formatCurrency(periodMetrics.totalGeralPeriodo)} ({periodMetrics.totalOrders} ped.)</span>
                   <span className="shrink-0 text-emerald-600 dark:text-emerald-400 font-semibold inline-flex items-center gap-0.5 group-hover:underline text-[11px]">
                     Detalhes <ChevronRight className="w-3 h-3" />
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between gap-1 pt-1 border-t border-slate-100 dark:border-slate-800/40">
-                  <span className="text-slate-400 dark:text-slate-500 shrink-0">Acumulado Geral:</span>
+                  <span className="text-slate-400 dark:text-slate-500 shrink-0">Faturado Histórico:</span>
                   <strong className="text-slate-700 dark:text-slate-300 font-semibold text-right">
-                    {formatCurrency(generalMetrics.totalGeralAcumulado)}
+                    {formatCurrency(generalMetrics.totalFaturadoGeral)}
                   </strong>
                 </div>
               </div>

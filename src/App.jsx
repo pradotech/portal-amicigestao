@@ -489,13 +489,8 @@ export function App() {
             fetchCounterpartiesFromSupabase(targetId)
           ])
 
-          const finalPayables = (supaPayables && supaPayables.length > 0) ? supaPayables : syncResult.payables
-          const finalReceivables = (supaReceivables && supaReceivables.length > 0)
-            ? supaReceivables.map(sr => {
-                const liveMatch = syncResult.receivables.find(lr => lr.id === sr.id || lr.orderNumber === sr.orderNumber || lr.documentNumber === sr.documentNumber)
-                return liveMatch ? { ...liveMatch, ...sr, items: liveMatch.items || [] } : sr
-              })
-            : syncResult.receivables
+          const finalPayables = (syncResult.payables && syncResult.payables.length > 0) ? syncResult.payables : (supaPayables || [])
+          const finalReceivables = (syncResult.receivables && syncResult.receivables.length > 0) ? syncResult.receivables : (supaReceivables || [])
 
           setPayables(finalPayables || [])
           setReceivables(finalReceivables || [])
