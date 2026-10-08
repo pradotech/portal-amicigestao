@@ -960,14 +960,13 @@ export async function persistBlingSyncToSupabase(clientId, syncData) {
           ca_receivable_id: String(r.id),
           customer_name: r.customer || 'Cliente Bling',
           category_name: r.category || 'Venda de Iluminação LED',
-          description: r.description || `Recebimento - ${r.customer || 'Bling'}`,
+          description: `[Empresa: ${r.companySource || 'BR Lumens'}] ${r.description || `Recebimento - ${r.customer || 'Bling'}`}`,
           amount: Number(r.amount || 0),
           received_amount: Number(r.amountPaid || 0),
           due_date: r.dueDate,
           status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
           payment_method: r.paymentMethod || 'boleto',
-          invoice_number: r.invoiceNumber || null,
-          notes: r.companySource ? `Empresa: ${r.companySource}` : 'Sincronizado via Bling ERP v3'
+          invoice_number: r.invoiceNumber || null
         }))
 
         // Limpeza atômica dos registros anteriores da BR Lumens

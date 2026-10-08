@@ -12,8 +12,8 @@ export const BLING_REDIRECT_URI = import.meta.env.VITE_BLING_REDIRECT_URI || 'ht
 export const BLING_AUTH_URL = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${BLING_CLIENT_ID}&state=amici_brlumens_comex`
 
 // Credenciais HGE Iluminação (Grupo BR Lumens)
-export const HGE_CLIENT_ID = import.meta.env.VITE_HGE_CLIENT_ID || '472b991e2e8ba4f9b23b702f47e52dfce41edca3'
-export const HGE_CLIENT_SECRET = import.meta.env.VITE_HGE_CLIENT_SECRET || 'b1b2af184d32af5d99b1365c977c8752d833077b6734b1aaf7411529621a'
+export const HGE_CLIENT_ID = import.meta.env.VITE_HGE_CLIENT_ID || '2d98294f0948441772adcf71ab82abdbf27d1594'
+export const HGE_CLIENT_SECRET = import.meta.env.VITE_HGE_CLIENT_SECRET || '665a5c85ef01e9ee550484c5abdad2ca71a9e00955fda1d9c0093b323630'
 export const HGE_AUTH_URL = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${HGE_CLIENT_ID}&state=amici_hge_iluminacao`
 
 export function getBlingConfig(clientId = 'br-lumens') {
@@ -25,7 +25,15 @@ export function getBlingConfig(clientId = 'br-lumens') {
 
   try {
     const saved = localStorage.getItem(`${BLING_STORAGE_KEY}_${clientId}`)
-    if (saved) return JSON.parse(saved)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (isHge && (parsed.clientId === '472b991e2e8ba4f9b23b702f47e52dfce41edca3' || !parsed.clientId)) {
+        parsed.clientId = defaultClientId
+        parsed.clientSecret = defaultClientSecret
+        localStorage.setItem(`${BLING_STORAGE_KEY}_${clientId}`, JSON.stringify(parsed))
+      }
+      return parsed
+    }
   } catch (e) {
     console.warn('Erro ao ler configuração do Bling:', e)
   }
@@ -802,35 +810,6 @@ export function extractOrderPaymentTerms(ped, issueDate) {
     }
   }
 
-  // 3. Reconhecimento específico para pedidos com condição parcelada real
-  const docNum = String(ped.numero || ped.id || ped.documentNumber || '')
-  const custName = String(ped.contato?.nome || ped.cliente?.nome || ped.customer || '').toUpperCase()
-  if (docNum.includes('258') || docNum.includes('26755794093') || custName.includes('IPE ILUMINACAO') || custName.includes('IPÊ')) {
-    return {
-      daysTerm: 44,
-      parcelas: [
-        { dias: 29, dataVencimento: '2026-09-30', valor: 26020.50 },
-        { dias: 44, dataVencimento: '2026-10-15', valor: 26020.50 },
-        { dias: 59, dataVencimento: '2026-10-30', valor: 26020.50 }
-      ],
-      condicao: '29 44 59',
-      lastDueDate: '2026-10-30'
-    }
-  }
-
-  if (docNum.includes('260') || docNum.includes('26756833142') || custName.includes('MGT BOLINA') || custName.includes('BOLINA')) {
-    return {
-      daysTerm: 52, // Média dos 4 prazos (29 + 44 + 59 + 74) / 4 = 51.5 -> 52 dias
-      parcelas: [
-        { dias: 29, dataVencimento: '2026-09-30', valor: 4212.28 },
-        { dias: 44, dataVencimento: '2026-10-15', valor: 1592.76 },
-        { dias: 59, dataVencimento: '2026-10-30', valor: 2195.02 },
-        { dias: 74, dataVencimento: '2026-11-14', valor: 3025.00 }
-      ],
-      condicao: '29 44 59 74',
-      lastDueDate: '2026-11-14'
-    }
-  }
 
   // 4. Se houver diferença entre data de saída / previsão e data do pedido
   const issueD = ped.data || ped.dataOperacao || ped.dataEmissao || issueDate

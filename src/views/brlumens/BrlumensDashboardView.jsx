@@ -163,16 +163,47 @@ export function BrlumensDashboardView({
     return allBrlumensReceivables
   }, [allBrlumensReceivables, selectedCompanyFilter])
 
-  // Filtragem pelo período ativo
+  // Base de vendas do Dashboard: Pedidos de Venda da empresa
+  // Se existirem pedidos de venda (recordType === 'order' ou id começa com 'bling-ped-'),
+  // utilizamos os pedidos de venda para não duplicar com duplicatas/parcelas de contas a receber!
+  const salesOrders = useMemo(() => {
+    const orders = filteredByCompanyReceivables.filter(r => 
+      r.recordType === 'order' || 
+      String(r.id).startsWith('bling-ped-') ||
+      (r.description && r.description.toLowerCase().includes('pedido de venda'))
+    )
+    if (orders.length > 0) return orders
+
+    // Fallback: se não houver tag 'order', deduplica títulos por documento/pedido
+    const seen = new Set()
+    return filteredByCompanyReceivables.filter(r => {
+      const key = r.orderNumber || r.documentNumber || r.id
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [filteredByCompanyReceivables])
+
+  // Filtragem pelo período ativo com base na DATA DE EMISSÃO DA VENDA (issueDate)
+  // Exatamente como calculado no Dashboard Mensal do Bling ERP!
   const periodReceivables = useMemo(() => {
-    return filterByDate(filteredByCompanyReceivables, 'dueDate')
-  }, [filteredByCompanyReceivables, filterByDate])
+    return filterByDate(salesOrders, 'issueDate')
+  }, [salesOrders, filterByDate])
 
   // Helper de situação
   const isReceived = (r) => r.status === 'received' || r.status === 'paid'
 
+  // Total de Peças / Produtos Físicos Vendidos no Período (Bling: 27.783 peças)
+  const totalProductsSold = useMemo(() => {
+    return periodReceivables.reduce((acc, r) => {
+      const items = Array.isArray(r.items) ? r.items : []
+      const itemsQty = items.reduce((sum, it) => sum + Number(it.quantity || 1), 0)
+      return acc + (itemsQty > 0 ? itemsQty : 1)
+    }, 0)
+  }, [periodReceivables])
+
   // =========================================================================
-  // 1. CÁLCULOS DO PERÍODO SELECIONADO (MÊS)
+  // 1. CÁLCULOS DO PERÍODO SELECIONADO (MÊS DE FATURAMENTO / VENDAS)
   // =========================================================================
   const periodMetrics = useMemo(() => {
     const totalOrders = periodReceivables.length
@@ -216,19 +247,19 @@ export function BrlumensDashboardView({
   // 2. CÁLCULOS ACUMULADOS HISTÓRICOS (GERAL DA EMPRESA SELECIONADA)
   // =========================================================================
   const generalMetrics = useMemo(() => {
-    const totalOrdersAll = filteredByCompanyReceivables.length
-    const atendidosAll = filteredByCompanyReceivables.filter(isReceived)
-    const pendentesAll = filteredByCompanyReceivables.filter(r => !isReceived(r))
+    const totalOrdersAll = salesOrders.length
+    const atendidosAll = salesOrders.filter(isReceived)
+    const pendentesAll = salesOrders.filter(r => !isReceived(r))
 
     const totalFaturadoGeral = atendidosAll.reduce((acc, r) => acc + Number(r.amountPaid || r.amount || 0), 0)
     const totalPendenteGeral = pendentesAll.reduce((acc, r) => acc + Number(r.amountRemaining || r.amount || 0), 0)
-    const totalGeralAcumulado = filteredByCompanyReceivables.reduce((acc, r) => acc + Number(r.amount || 0), 0)
+    const totalGeralAcumulado = salesOrders.reduce((acc, r) => acc + Number(r.amount || 0), 0)
 
     const ticketMedioGeral = totalOrdersAll > 0 ? (totalGeralAcumulado / totalOrdersAll) : 0
 
     let totalWeightedDays = 0
     let totalWeightAmount = 0
-    filteredByCompanyReceivables.forEach(r => {
+    salesOrders.forEach(r => {
       const amt = Number(r.amount || 0)
       const days = Number(r.daysTerm || 44)
       if (amt > 0) {
@@ -248,7 +279,7 @@ export function BrlumensDashboardView({
       ticketMedioGeral,
       pmrGeral
     }
-  }, [filteredByCompanyReceivables])
+  }, [salesOrders])
 
   // =========================================================================
   // 3. RANKING DE CLIENTES (MÊS vs GERAL)
@@ -439,8 +470,8 @@ export function BrlumensDashboardView({
     const history = []
     for (let m = 1; m <= 12; m++) {
       const monthStr = `${selectedYear}-${String(m).padStart(2, '0')}`
-      const monthItems = filteredByCompanyReceivables.filter(r => {
-        const d = r.dueDate || r.issueDate || ''
+      const monthItems = salesOrders.filter(r => {
+        const d = r.issueDate || r.date || r.dueDate || ''
         return d.startsWith(monthStr)
       })
 
@@ -784,7 +815,7 @@ export function BrlumensDashboardView({
           {/* Cards de Indicadores Principais */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
-            {/* Card 1: Faturamento Atendido */}
+            {/* Card 1: Valor Total de Vendas */}
             <div
               onClick={() => handleOpenDetail('faturamento')}
               className="group cursor-pointer p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/60 hover:bg-slate-50 dark:hover:bg-slate-850/90 transition-all duration-200 shadow-sm dark:shadow-xl hover:shadow-emerald-500/10 hover:scale-[1.015] relative overflow-hidden flex flex-col justify-between min-h-[160px]"
@@ -792,7 +823,7 @@ export function BrlumensDashboardView({
               <div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                    Faturamento Atendido
+                    Valor Total de Vendas
                   </span>
                   <span className="shrink-0 p-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-500/20 group-hover:scale-110 transition-all">
                     <TrendingUp className="w-4 h-4" />
@@ -800,14 +831,14 @@ export function BrlumensDashboardView({
                 </div>
                 <div className="mt-2">
                   <div className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors break-words">
-                    {formatCurrency(periodMetrics.totalFaturado)}
+                    {formatCurrency(periodMetrics.totalGeralPeriodo)}
                   </div>
                 </div>
               </div>
 
               <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-1.5">
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 gap-1.5">
-                  <span>{periodMetrics.atendidosCount} pedidos faturados</span>
+                  <span>Atendido: {formatCurrency(periodMetrics.totalFaturado)} ({periodMetrics.atendidosCount} ped.)</span>
                   <span className="shrink-0 text-emerald-600 dark:text-emerald-400 font-semibold inline-flex items-center gap-0.5 group-hover:underline text-[11px]">
                     Detalhes <ChevronRight className="w-3 h-3" />
                   </span>
@@ -815,13 +846,13 @@ export function BrlumensDashboardView({
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between gap-1 pt-1 border-t border-slate-100 dark:border-slate-800/40">
                   <span className="text-slate-400 dark:text-slate-500 shrink-0">Acumulado Geral:</span>
                   <strong className="text-slate-700 dark:text-slate-300 font-semibold text-right">
-                    {formatCurrency(generalMetrics.totalFaturadoGeral)}
+                    {formatCurrency(generalMetrics.totalGeralAcumulado)}
                   </strong>
                 </div>
               </div>
             </div>
 
-            {/* Card 2: Vendas / Pedidos em Aberto */}
+            {/* Card 2: Vendas em Aberto / Em Andamento */}
             <div
               onClick={() => handleOpenDetail('pedidos_aberto')}
               className="group cursor-pointer p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-amber-500/60 hover:bg-slate-50 dark:hover:bg-slate-850/90 transition-all duration-200 shadow-sm dark:shadow-xl hover:shadow-amber-500/10 hover:scale-[1.015] relative overflow-hidden flex flex-col justify-between min-h-[160px]"
@@ -844,7 +875,7 @@ export function BrlumensDashboardView({
 
               <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-1.5">
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 gap-1.5">
-                  <span>{periodMetrics.pendentesCount} títulos a liquidar</span>
+                  <span>{periodMetrics.pendentesCount} pedidos em andamento</span>
                   <span className="shrink-0 text-amber-600 dark:text-amber-400 font-semibold inline-flex items-center gap-0.5 group-hover:underline text-[11px]">
                     Detalhes <ChevronRight className="w-3 h-3" />
                   </span>
@@ -895,7 +926,7 @@ export function BrlumensDashboardView({
               </div>
             </div>
 
-            {/* Card 4: Prazo Médio de Recebimento (PMR) */}
+            {/* Card 4: Prazo Médio de Recebimento (PMR) & Produtos */}
             <div
               onClick={() => handleOpenDetail('pmr')}
               className="group cursor-pointer p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-purple-500/60 hover:bg-slate-50 dark:hover:bg-slate-850/90 transition-all duration-200 shadow-sm dark:shadow-xl hover:shadow-purple-500/10 hover:scale-[1.015] relative overflow-hidden flex flex-col justify-between min-h-[160px]"
@@ -918,7 +949,7 @@ export function BrlumensDashboardView({
 
               <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-1.5">
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 gap-1.5">
-                  <span>Prazo de recebimento</span>
+                  <span>{totalProductsSold.toLocaleString('pt-BR')} peças vendidas</span>
                   <span className="shrink-0 text-purple-600 dark:text-purple-400 font-semibold inline-flex items-center gap-0.5 group-hover:underline text-[11px]">
                     Análise <ChevronRight className="w-3 h-3" />
                   </span>
