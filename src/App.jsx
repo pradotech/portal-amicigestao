@@ -53,8 +53,7 @@ import {
   syncRealBlingData,
   refreshBlingAccessToken,
   checkAndAutoRenewBlingToken,
-  getBlingTokenExpirationInfo,
-  BR_LUMENS_CATALOG_PRODUCTS
+  getBlingTokenExpirationInfo
 } from './services/blingService'
 import { RefreshCw } from 'lucide-react'
 
@@ -163,18 +162,34 @@ export function App() {
         const isBling = isBlingClient(selectedClient)
 
         if (isBling) {
-          // 1. Auto-Refresh Proativo Bling ERP (v3)
+          // 1. Auto-Refresh Proativo Bling ERP (v3) - BR Lumens
           const blingInfo = getBlingTokenExpirationInfo(selectedClient?.id)
           if (blingInfo.isConfigured && (blingInfo.isExpired || blingInfo.remainingMinutes <= 10)) {
             const blingConf = getBlingConfig(selectedClient?.id)
             const refreshToken = blingConf.refreshToken || selectedClient?.blingConfig?.refreshToken
             if (refreshToken && !failedRefreshTokensRef.current.has(`bling_${refreshToken}`)) {
-              console.log('🔄 Executando renovação automática de token do Bling ERP em background...')
+              console.log('🔄 Executando renovação automática de token do Bling ERP (BR Lumens) em background...')
               const res = await refreshBlingAccessToken(selectedClient)
               if (res.success) {
                 setTokenVersion(v => v + 1)
               } else {
                 failedRefreshTokensRef.current.add(`bling_${refreshToken}`)
+              }
+            }
+          }
+
+          // 1.1 Auto-Refresh Proativo Bling ERP (v3) - HGE Iluminação
+          const hgeInfo = getBlingTokenExpirationInfo('hge-iluminacao')
+          if (hgeInfo.isConfigured && (hgeInfo.isExpired || hgeInfo.remainingMinutes <= 10)) {
+            const hgeConf = getBlingConfig('hge-iluminacao')
+            const refreshToken = hgeConf.refreshToken
+            if (refreshToken && !failedRefreshTokensRef.current.has(`bling_hge_${refreshToken}`)) {
+              console.log('🔄 Executando renovação automática de token do Bling ERP (HGE Iluminação) em background...')
+              const res = await refreshBlingAccessToken('hge-iluminacao')
+              if (res.success) {
+                setTokenVersion(v => v + 1)
+              } else {
+                failedRefreshTokensRef.current.add(`bling_hge_${refreshToken}`)
               }
             }
           }
@@ -272,16 +287,21 @@ export function App() {
           }
           return
         }
-        
         if (code) {
-          const isBlingAuth = state.includes('bling') || state.includes('comex') || window.location.pathname.includes('bling')
+          const isHgeAuth = state.toLowerCase().includes('hge')
+          const isBlingAuth = isHgeAuth || state.includes('bling') || state.includes('comex') || window.location.pathname.includes('bling')
 
           if (isBlingAuth) {
-            setSyncToast('Processando código de autorização do Bling ERP (BR Lumens)...')
-            const res = await exchangeBlingCodeForToken(code)
+            const targetAccountKey = isHgeAuth ? 'hge-iluminacao' : 'br-lumens'
+            const companyName = isHgeAuth ? 'HGE Iluminação' : 'BR Lumens'
+            setSyncToast(`Processando código de autorização do Bling ERP (${companyName})...`)
+            const res = await exchangeBlingCodeForToken(code, targetAccountKey)
             if (res.success) {
               setTokenVersion(v => v + 1)
-              setSyncToast('✓ Bling ERP da BR Lumens conectado com sucesso!')
+              setSyncToast(`✓ Bling ERP da ${companyName} conectado com sucesso!`)
+              window.history.replaceState({}, document.title, window.location.pathname)
+            } else {
+              setSyncToast(`Aviso Bling: ${res.error || 'Falha ao autorizar'}`)
               window.history.replaceState({}, document.title, window.location.pathname)
             }
           } else {
@@ -667,9 +687,9 @@ export function App() {
     pendingPayables: payables.filter(p => p.status === 'pending_client' || p.status === 'scheduled').length,
     receivablesCount: receivables.length,
     pendingReconciliation: transactions.filter(t => !t.isReconciled).length,
-    ruptureCount: BR_LUMENS_CATALOG_PRODUCTS.filter(p => p.currentStock === 0).length,
-    totalSkus: BR_LUMENS_CATALOG_PRODUCTS.length,
-    totalPhysicalUnits: BR_LUMENS_CATALOG_PRODUCTS.reduce((acc, p) => acc + (p.currentStock || 0), 0)
+    ruptureCount: 0,
+    totalSkus: receivables.length,
+    totalPhysicalUnits: receivables.reduce((acc, r) => acc + (Array.isArray(r.items) ? r.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0) : 0), 0)
   }
 
   // ===========================================================================

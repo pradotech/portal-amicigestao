@@ -4,12 +4,25 @@
  */
 
 const BLING_STORAGE_KEY = 'amici_bling_config_v1'
+
+// Credenciais BR Lumens
 export const BLING_CLIENT_ID = import.meta.env.VITE_BLING_CLIENT_ID || '2d98294f0948441772adcf71ab82abdbf27d1594'
 export const BLING_CLIENT_SECRET = import.meta.env.VITE_BLING_CLIENT_SECRET || '665a5c85ef01e9ee550484c5abdad2ca71a9e00955fda1d9c0093b323630'
 export const BLING_REDIRECT_URI = import.meta.env.VITE_BLING_REDIRECT_URI || 'https://portal-amicigestao.vercel.app/oauth/bling/callback'
 export const BLING_AUTH_URL = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${BLING_CLIENT_ID}&state=amici_brlumens_comex`
 
+// Credenciais HGE Iluminação (Grupo BR Lumens)
+export const HGE_CLIENT_ID = import.meta.env.VITE_HGE_CLIENT_ID || '472b991e2e8ba4f9b23b702f47e52dfce41edca3'
+export const HGE_CLIENT_SECRET = import.meta.env.VITE_HGE_CLIENT_SECRET || 'b1b2af184d32af5d99b1365c977c8752d833077b6734b1aaf7411529621a'
+export const HGE_AUTH_URL = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${HGE_CLIENT_ID}&state=amici_hge_iluminacao`
+
 export function getBlingConfig(clientId = 'br-lumens') {
+  const isHge = clientId === 'hge-iluminacao' || String(clientId).toLowerCase().includes('hge')
+  const defaultClientId = isHge ? HGE_CLIENT_ID : BLING_CLIENT_ID
+  const defaultClientSecret = isHge ? HGE_CLIENT_SECRET : BLING_CLIENT_SECRET
+  const defaultCompanyName = isHge ? 'HGE Iluminação' : 'BR Lumens Iluminação & Importação'
+  const defaultEmail = isHge ? 'financeiro@hgeiluminacao.com.br' : 'financeiro@brlumens.com.br'
+
   try {
     const saved = localStorage.getItem(`${BLING_STORAGE_KEY}_${clientId}`)
     if (saved) return JSON.parse(saved)
@@ -18,27 +31,30 @@ export function getBlingConfig(clientId = 'br-lumens') {
   }
 
   return {
-    clientId: BLING_CLIENT_ID,
-    clientSecret: BLING_CLIENT_SECRET,
+    clientId: defaultClientId,
+    clientSecret: defaultClientSecret,
     accessToken: '',
     refreshToken: '',
-    apiKey: 'bling_api_token_v3_brlumens_prod',
-    userEmail: 'financeiro@brlumens.com.br',
-    companyName: 'BR Lumens Iluminação & Importação',
-    status: 'connected',
-    lastSync: 'Pronto para sincronizar via Bling API v3',
+    apiKey: isHge ? '' : 'bling_api_token_v3_brlumens_prod',
+    userEmail: defaultEmail,
+    companyName: defaultCompanyName,
+    status: isHge ? 'ready' : 'connected',
+    lastSync: isHge ? 'Pronto para conectar via Bling API v3' : 'Pronto para sincronizar via Bling API v3',
     version: 'v3'
   }
 }
 
 export function saveBlingConfig(config, clientId = 'br-lumens') {
   try {
+    const isHge = clientId === 'hge-iluminacao' || String(clientId).toLowerCase().includes('hge')
+    const defaultClientId = isHge ? HGE_CLIENT_ID : BLING_CLIENT_ID
+    const defaultClientSecret = isHge ? HGE_CLIENT_SECRET : BLING_CLIENT_SECRET
     const current = getBlingConfig(clientId)
     const updated = {
       ...current,
       ...config,
-      clientId: BLING_CLIENT_ID,
-      clientSecret: config.clientSecret || BLING_CLIENT_SECRET,
+      clientId: config.clientId || current.clientId || defaultClientId,
+      clientSecret: config.clientSecret || current.clientSecret || defaultClientSecret,
       lastSync: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     }
     localStorage.setItem(`${BLING_STORAGE_KEY}_${clientId}`, JSON.stringify(updated))
@@ -49,8 +65,10 @@ export function saveBlingConfig(config, clientId = 'br-lumens') {
   }
 }
 
-export function buildBlingAuthUrl(state = 'amici_brlumens_comex') {
-  return `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${BLING_CLIENT_ID}&state=${encodeURIComponent(state)}`
+export function buildBlingAuthUrl(state = 'amici_brlumens_comex', account = 'br-lumens') {
+  const isHge = account === 'hge-iluminacao' || state.includes('hge')
+  const cid = isHge ? HGE_CLIENT_ID : BLING_CLIENT_ID
+  return `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${cid}&state=${encodeURIComponent(state)}`
 }
 
 /**
@@ -113,18 +131,22 @@ export function getBlingTokenExpirationInfo(clientId = 'br-lumens') {
 /**
  * Renova o Access Token do Bling ERP automaticamente utilizando o Refresh Token (OAuth2 v3)
  */
-export async function refreshBlingAccessToken(targetClient) {
-  const clientIdKey = targetClient?.id || 'br-lumens'
+export async function refreshBlingAccessToken(targetClient = 'br-lumens') {
+  const clientIdKey = typeof targetClient === 'string' ? targetClient : (targetClient?.id || 'br-lumens')
+  const isHge = clientIdKey === 'hge-iluminacao' || String(clientIdKey).toLowerCase().includes('hge')
+  const defaultClientId = isHge ? HGE_CLIENT_ID : BLING_CLIENT_ID
+  const defaultClientSecret = isHge ? HGE_CLIENT_SECRET : BLING_CLIENT_SECRET
+
   const config = getBlingConfig(clientIdKey)
   const refreshToken = (config.refreshToken || targetClient?.blingConfig?.refreshToken || '').trim()
 
   if (!refreshToken) {
-    console.warn('⚠️ Bling ERP: Nenhum Refresh Token cadastrado para renovação automática.')
+    console.warn(`⚠️ Bling ERP (${isHge ? 'HGE' : 'BR Lumens'}): Nenhum Refresh Token cadastrado para renovação automática.`)
     return { success: false, error: 'Nenhum Refresh Token do Bling disponível para renovação automática.' }
   }
 
-  const clientId = (config.clientId || BLING_CLIENT_ID).trim()
-  const clientSecret = (config.clientSecret || BLING_CLIENT_SECRET).trim()
+  const clientId = (config.clientId || defaultClientId).trim()
+  const clientSecret = (config.clientSecret || defaultClientSecret).trim()
   const basicAuth = btoa(`${clientId}:${clientSecret}`)
 
   try {
@@ -143,7 +165,7 @@ export async function refreshBlingAccessToken(targetClient) {
 
     if (!response.ok) {
       const errText = await response.text()
-      console.warn('⚠️ Falha ao renovar token do Bling ERP:', errText)
+      console.warn(`⚠️ Falha ao renovar token do Bling ERP (${isHge ? 'HGE' : 'BR Lumens'}):`, errText)
       return { success: false, error: `Bling OAuth2: ${errText || 'Erro no refresh'}` }
     }
 
@@ -165,7 +187,7 @@ export async function refreshBlingAccessToken(targetClient) {
 
     // Dispara evento global de renovação
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('amici_bling_token_refreshed', { detail: updated }))
+      window.dispatchEvent(new CustomEvent('amici_bling_token_refreshed', { detail: { account: clientIdKey, ...updated } }))
     }
 
     return {
@@ -175,7 +197,7 @@ export async function refreshBlingAccessToken(targetClient) {
       expiresAt: expiresAtDate
     }
   } catch (err) {
-    console.error('Erro na renovação do token do Bling:', err)
+    console.error(`Erro na renovação do token do Bling (${isHge ? 'HGE' : 'BR Lumens'}):`, err)
     return { success: false, error: err.message }
   }
 }
@@ -201,7 +223,11 @@ export async function checkAndAutoRenewBlingToken(targetClient) {
  */
 export async function exchangeBlingCodeForToken(code, clientIdKey = 'br-lumens') {
   try {
-    const basicAuth = btoa(`${BLING_CLIENT_ID}:${BLING_CLIENT_SECRET}`)
+    const isHge = clientIdKey === 'hge-iluminacao' || String(clientIdKey).toLowerCase().includes('hge')
+    const activeClientId = isHge ? HGE_CLIENT_ID : BLING_CLIENT_ID
+    const activeClientSecret = isHge ? HGE_CLIENT_SECRET : BLING_CLIENT_SECRET
+    const basicAuth = btoa(`${activeClientId}:${activeClientSecret}`)
+
     const response = await fetch('/api-bling/oauth/token', {
       method: 'POST',
       headers: {
@@ -217,7 +243,7 @@ export async function exchangeBlingCodeForToken(code, clientIdKey = 'br-lumens')
 
     if (!response.ok) {
       const errText = await response.text()
-      console.warn('Erro ao trocar código por token no Bling:', errText)
+      console.warn(`Erro ao trocar código por token no Bling (${isHge ? 'HGE' : 'BR Lumens'}):`, errText)
       saveBlingConfig({
         status: 'connected',
         lastAuthCode: code,
@@ -261,10 +287,23 @@ export const BLING_INITIAL_COUNTERPARTIES = []
 /**
  * Helper de requisição resiliente com Proxy anti-CORS (/api-bling) e renovação automática de token
  */
-async function fetchBlingApi(endpoint, apiKey, options = {}) {
-  const config = getBlingConfig()
-  let token = apiKey || config.accessToken || config.apiKey
-  if (!token) return { ok: false, status: 401, data: [], error: 'Token não configurado' }
+async function fetchBlingApi(endpoint, apiKeyOrAccount, options = {}) {
+  let token = ''
+  let accountKey = 'br-lumens'
+
+  if (apiKeyOrAccount === 'hge-iluminacao' || String(apiKeyOrAccount).toLowerCase().includes('hge')) {
+    accountKey = 'hge-iluminacao'
+    const conf = getBlingConfig(accountKey)
+    token = conf.accessToken || conf.apiKey
+  } else if (apiKeyOrAccount && typeof apiKeyOrAccount === 'string' && apiKeyOrAccount.length > 25 && !apiKeyOrAccount.includes('-') && !apiKeyOrAccount.includes('_')) {
+    token = apiKeyOrAccount
+  } else {
+    accountKey = typeof apiKeyOrAccount === 'string' ? apiKeyOrAccount : 'br-lumens'
+    const conf = getBlingConfig(accountKey)
+    token = conf.accessToken || conf.apiKey
+  }
+
+  if (!token) return { ok: false, status: 401, data: [], error: `Token não configurado para ${accountKey}` }
 
   let headers = {
     'Authorization': `Bearer ${token}`,
@@ -283,8 +322,8 @@ async function fetchBlingApi(endpoint, apiKey, options = {}) {
 
     // Se receber 401 (token expirado ou não autorizado), renova automaticamente via Refresh Token e repete
     if (!res.ok && res.status === 401) {
-      console.log('🔄 Bling ERP: Token expirado (401). Executando auto-renovação transparente via OAuth2 Refresh Token...')
-      const refreshed = await refreshBlingAccessToken()
+      console.log(`🔄 Bling ERP (${accountKey}): Token expirado (401). Executando auto-renovação transparente via OAuth2 Refresh Token...`)
+      const refreshed = await refreshBlingAccessToken(accountKey)
       if (refreshed && refreshed.success && refreshed.accessToken) {
         token = refreshed.accessToken
         headers['Authorization'] = `Bearer ${token}`
@@ -301,10 +340,10 @@ async function fetchBlingApi(endpoint, apiKey, options = {}) {
     }
 
     const errText = await res.text()
-    console.warn(`[Bling API] Resposta ${res.status} em ${cleanEndpoint}:`, errText)
+    console.warn(`[Bling API - ${accountKey}] Resposta ${res.status} em ${cleanEndpoint}:`, errText)
     return { ok: false, status: res.status, data: [], error: errText }
   } catch (err) {
-    console.warn(`[Bling API] Falha de conexão em ${cleanEndpoint}:`, err.message)
+    console.warn(`[Bling API - ${accountKey}] Falha de conexão em ${cleanEndpoint}:`, err.message)
     return { ok: false, status: 500, data: [], error: err.message }
   }
 }
@@ -572,292 +611,54 @@ export async function fetchBlingProdutos(apiKey) {
 /**
  * Catálogo Oficial de Linhas e Produtos BR Lumens com Inteligência de Estoque & Ruptura
  */
-export const BR_LUMENS_CATALOG_PRODUCTS = [
-  // 1. Linha Natalina & Decorativa (Alta Rotação / Sazonal)
-  { 
-    code: '1143', 
-    description: 'CORDÃO 100 LEDS C/STROBO 220V - FIO BRANCO - BF', 
-    unitValue: 19.00, 
-    costPrice: 10.50,
-    currentStock: 15, 
-    minStock: 150, 
-    daysWithoutSale: 0,
-    category: 'Iluminação Natalina & Decorativa' 
-  },
-  { 
-    code: '1147', 
-    description: 'CORDÃO 100 LEDS C/STROBO 220V - FIO VERDE - VD', 
-    unitValue: 19.00, 
-    costPrice: 10.50,
-    currentStock: 0, 
-    minStock: 200, 
-    daysWithoutSale: 0,
-    category: 'Iluminação Natalina & Decorativa' 
-  },
-  { 
-    code: '1157', 
-    description: 'MANGUEIRA C/STROBO 100M 220V - BF', 
-    unitValue: 630.00, 
-    costPrice: 380.00,
-    currentStock: 45, 
-    minStock: 20, 
-    daysWithoutSale: 0,
-    category: 'Mangueiras LED & Fachadas' 
-  },
-  { 
-    code: '1204', 
-    description: 'CORDÃO 100 LEDS FIXO 10M FIO AZUL CLARO 220V - AZUL', 
-    unitValue: 18.50, 
-    costPrice: 9.80,
-    currentStock: 0, 
-    minStock: 300, 
-    daysWithoutSale: 0,
-    category: 'Iluminação Natalina & Decorativa' 
-  },
-  { 
-    code: '1234', 
-    description: 'CORDÃO 100 LEDS C/STROBO 220V - VERMELHO', 
-    unitValue: 19.00, 
-    costPrice: 10.50,
-    currentStock: 12, 
-    minStock: 100, 
-    daysWithoutSale: 0,
-    category: 'Iluminação Natalina & Decorativa' 
-  },
-  { 
-    code: '1247', 
-    description: 'CORDÃO 100 LEDS FIXO 10M FIO BRANCO 220V - BF', 
-    unitValue: 18.50, 
-    costPrice: 9.80,
-    currentStock: 0, 
-    minStock: 250, 
-    daysWithoutSale: 0,
-    category: 'Iluminação Natalina & Decorativa' 
-  },
-  { 
-    code: '1253', 
-    description: 'CORDÃO 100 LEDS FIXO 10M FIO AZUL ESCURO 220V - AZUL', 
-    unitValue: 18.50, 
-    costPrice: 9.80,
-    currentStock: 0, 
-    minStock: 250, 
-    daysWithoutSale: 0,
-    category: 'Iluminação Natalina & Decorativa' 
-  },
-  { 
-    code: '1260', 
-    description: 'REDE DE LED 3X2M 320 LEDS FIXO 220V - BRANCO QUENTE', 
-    unitValue: 125.00, 
-    costPrice: 72.00,
-    currentStock: 8, 
-    minStock: 60, 
-    daysWithoutSale: 0,
-    category: 'Iluminação Natalina & Decorativa' 
-  },
-  { 
-    code: '1272', 
-    description: 'CASCATA 400 LEDS 10M 8 FUNÇÕES 220V - BF', 
-    unitValue: 78.00, 
-    costPrice: 44.00,
-    currentStock: 0, 
-    minStock: 80, 
-    daysWithoutSale: 0,
-    category: 'Iluminação Natalina & Decorativa' 
-  },
-
-  // 2. Refletores, Projetores Industriais & Fachadas
-  { 
-    code: '1089', 
-    description: 'REFLETOR LED MICROLED 200W IP66 BRANCO FRIO 6500K', 
-    unitValue: 89.90, 
-    costPrice: 52.00,
-    currentStock: 280, 
-    minStock: 50, 
-    daysWithoutSale: 68,
-    category: 'Refletores & Projetores' 
-  },
-  { 
-    code: '1095', 
-    description: 'REFLETOR LED SMD SLIM 100W IP66 BIVOLT 6500K', 
-    unitValue: 48.00, 
-    costPrice: 27.50,
-    currentStock: 520, 
-    minStock: 100, 
-    daysWithoutSale: 12,
-    category: 'Refletores & Projetores' 
-  },
-  { 
-    code: '1190', 
-    description: 'PROJETOR LED MODULAR STADIUM 400W BIVOLT ALTA POTÊNCIA', 
-    unitValue: 1280.00, 
-    costPrice: 790.00,
-    currentStock: 18, 
-    minStock: 5, 
-    daysWithoutSale: 110,
-    category: 'Refletores & Projetores' 
-  },
-  { 
-    code: '1195', 
-    description: 'PROJETOR LED MODULAR STADIUM 600W IP67 PREMIUM', 
-    unitValue: 1850.00, 
-    costPrice: 1120.00,
-    currentStock: 6, 
-    minStock: 4, 
-    daysWithoutSale: 145,
-    category: 'Refletores & Projetores' 
-  },
-
-  // 3. Fitas LED, Módulos & Neon Flex
-  { 
-    code: '1065', 
-    description: 'FITA LED NEON FLEX 2835 120 LED/M 220V ROLO 50M', 
-    unitValue: 450.00, 
-    costPrice: 260.00,
-    currentStock: 60, 
-    minStock: 15, 
-    daysWithoutSale: 55,
-    category: 'Fitas LED & Neon' 
-  },
-  { 
-    code: '1070', 
-    description: 'FITA LED COB 320 LED/M 12V BRANCO QUENTE 3000K 5M', 
-    unitValue: 85.00, 
-    costPrice: 48.00,
-    currentStock: 340, 
-    minStock: 50, 
-    daysWithoutSale: 8,
-    category: 'Fitas LED & Neon' 
-  },
-  { 
-    code: '1075', 
-    description: 'MÓDULO LED INJEÇÃO 3 LEDS 2835 1.5W 12V IP67 BRANCO', 
-    unitValue: 2.80, 
-    costPrice: 1.40,
-    currentStock: 4800, 
-    minStock: 1000, 
-    daysWithoutSale: 4,
-    category: 'Fitas LED & Neon' 
-  },
-
-  // 4. Painéis, Plafons & Iluminação Residencial / Comercial
-  { 
-    code: '1042', 
-    description: 'PAINEL LED SLIM EMBUTIR 24W QUADRADO 6500K', 
-    unitValue: 32.50, 
-    costPrice: 18.00,
-    currentStock: 450, 
-    minStock: 80, 
-    daysWithoutSale: 92,
-    category: 'Painéis & Plafons LED' 
-  },
-  { 
-    code: '1048', 
-    description: 'PAINEL LED EMBUTIR 18W REDONDO 4000K BRANCO NEUTRO', 
-    unitValue: 24.90, 
-    costPrice: 13.80,
-    currentStock: 620, 
-    minStock: 100, 
-    daysWithoutSale: 15,
-    category: 'Painéis & Plafons LED' 
-  },
-  { 
-    code: '1052', 
-    description: 'PAINEL LED SOBREPOR 36W RETANGULAR 120X30CM 6500K', 
-    unitValue: 98.00, 
-    costPrice: 56.00,
-    currentStock: 110, 
-    minStock: 30, 
-    daysWithoutSale: 32,
-    category: 'Painéis & Plafons LED' 
-  },
-
-  // 5. Tubulares, Lâmpadas & Fontes de Alimentação
-  { 
-    code: '1015', 
-    description: 'LÂMPADA LED TUBULAR T8 18W 120CM G13 BRANCO FRIO', 
-    unitValue: 14.90, 
-    costPrice: 8.20,
-    currentStock: 1200, 
-    minStock: 200, 
-    daysWithoutSale: 75,
-    category: 'Tubulares & Lâmpadas' 
-  },
-  { 
-    code: '1020', 
-    description: 'LÂMPADA LED BULBO A60 12W E27 BIVOLT 6500K', 
-    unitValue: 6.90, 
-    costPrice: 3.80,
-    currentStock: 2500, 
-    minStock: 500, 
-    daysWithoutSale: 5,
-    category: 'Tubulares & Lâmpadas' 
-  },
-  { 
-    code: '1130', 
-    description: 'FONTE CHAVEADA COLMÉIA 12V 30A 360W BIVOLT SLIM', 
-    unitValue: 115.00, 
-    costPrice: 65.00,
-    currentStock: 185, 
-    minStock: 40, 
-    daysWithoutSale: 20,
-    category: 'Fontes & Drivers' 
-  },
-  { 
-    code: '1135', 
-    description: 'FONTE SLIM SLIMLINE 12V 10A 120W BIVOLT IP20', 
-    unitValue: 58.00, 
-    costPrice: 32.00,
-    currentStock: 290, 
-    minStock: 50, 
-    daysWithoutSale: 18,
-    category: 'Fontes & Drivers' 
-  }
-]
+export const BR_LUMENS_CATALOG_PRODUCTS = []
 
 /**
  * Motor de Inteligência de Estoque: Diagnóstico de Ruptura, Estoque Parado, Giro e Total de Peças Físicas
  */
-export function calculateStockIntelligence(salesRanking = []) {
-  const salesMap = new Map()
-  salesRanking.forEach(p => {
-    if (p.code) salesMap.set(p.code, p)
-    if (p.description) salesMap.set(p.description, p)
-  })
+export function calculateStockIntelligence(salesRanking = [], realCatalog = []) {
+  const baseList = Array.isArray(realCatalog) && realCatalog.length > 0
+    ? realCatalog
+    : (Array.isArray(salesRanking) ? salesRanking : [])
 
-  const allItems = BR_LUMENS_CATALOG_PRODUCTS.map(catalogProd => {
-    const saleInfo = salesMap.get(catalogProd.code) || salesMap.get(catalogProd.description) || null
-    const unitsSold = saleInfo ? Number(saleInfo.quantity || 0) : 0
-    const revenueSold = saleInfo ? Number(saleInfo.totalAmount || 0) : 0
-    const currentStock = Number(catalogProd.currentStock || 0)
-    const minStock = Number(catalogProd.minStock || 50)
-    const costPrice = Number(catalogProd.costPrice || (catalogProd.unitValue * 0.6))
+  const allItems = baseList.map(prod => {
+    const unitsSold = Number(prod.quantity || prod.unitsSold || 0)
+    const revenueSold = Number(prod.totalAmount || prod.revenueSold || (unitsSold * Number(prod.unitValue || 0)) || 0)
+    const currentStock = Number(prod.currentStock !== undefined ? prod.currentStock : (prod.estoqueAtual || 0))
+    const minStock = Number(prod.minStock !== undefined ? prod.minStock : (prod.estoqueMinimo || 0))
+    const unitVal = Number(prod.unitValue || (unitsSold > 0 ? revenueSold / unitsSold : 0))
+    const costPrice = Number(prod.costPrice || (unitVal * 0.6))
     const capitalImobilizado = currentStock * costPrice
 
-    let stockStatus = 'saudavel'
-    let statusLabel = 'Estoque Saudável'
-    let alertType = 'success'
-    let daysCoverage = unitsSold > 0 ? Math.round((currentStock / unitsSold) * 30) : (currentStock > 0 ? 999 : 0)
+    let stockStatus = "saudavel"
+    let statusLabel = "Estoque Regular"
+    let alertType = "success"
+    let daysCoverage = unitsSold > 0 && currentStock > 0 ? Math.round((currentStock / unitsSold) * 30) : 0
 
     if (unitsSold > 0 && currentStock <= 0) {
-      stockStatus = 'ruptura'
-      statusLabel = 'Ruptura Crítica (Estoque Zerado)'
-      alertType = 'danger'
-    } else if (unitsSold > 0 && currentStock < minStock) {
-      stockStatus = 'ruptura'
-      statusLabel = 'Risco Iminente de Ruptura'
-      alertType = 'warning'
+      stockStatus = "ruptura"
+      statusLabel = "Ruptura (Estoque Zerado)"
+      alertType = "danger"
+    } else if (minStock > 0 && currentStock < minStock) {
+      stockStatus = "ruptura"
+      statusLabel = "Risco de Ruptura"
+      alertType = "warning"
     } else if (unitsSold === 0 && currentStock > 0) {
-      stockStatus = 'parado'
-      statusLabel = 'Estoque Parado (Sem Venda)'
-      alertType = 'danger'
+      stockStatus = "parado"
+      statusLabel = "Estoque Parado"
+      alertType = "danger"
     } else if (daysCoverage > 90) {
-      stockStatus = 'excesso'
-      statusLabel = 'Excesso de Estoque'
-      alertType = 'warning'
+      stockStatus = "excesso"
+      statusLabel = "Excesso de Estoque"
+      alertType = "warning"
     }
 
     return {
-      ...catalogProd,
+      id: prod.id || prod.code || prod.description,
+      code: prod.code || "SKU",
+      description: prod.description || "Produto",
+      category: prod.category || "Geral",
+      unitValue: unitVal,
       unitsSold,
       revenueSold,
       currentStock,
@@ -868,30 +669,27 @@ export function calculateStockIntelligence(salesRanking = []) {
       statusLabel,
       alertType,
       daysCoverage,
-      daysWithoutSale: unitsSold > 0 ? 0 : (catalogProd.daysWithoutSale || 45)
+      daysWithoutSale: unitsSold > 0 ? 0 : 30
     }
   })
 
-  const ruptureItems = allItems.filter(i => i.stockStatus === 'ruptura')
-  const deadStockItems = allItems.filter(i => i.stockStatus === 'parado')
-  const healthyItems = allItems.filter(i => i.stockStatus === 'saudavel')
-  const overstockItems = allItems.filter(i => i.stockStatus === 'excesso')
+  const ruptureItems = allItems.filter(i => i.stockStatus === "ruptura")
+  const deadStockItems = allItems.filter(i => i.stockStatus === "parado")
+  const healthyItems = allItems.filter(i => i.stockStatus === "saudavel")
+  const overstockItems = allItems.filter(i => i.stockStatus === "excesso")
 
-  // Consolidação de Valores Financeiros e Volumes Físicos de Itens (Peças)
   const totalCapitalImobilizado = allItems.reduce((acc, i) => acc + i.capitalImobilizado, 0)
   const deadStockCapital = deadStockItems.reduce((acc, i) => acc + i.capitalImobilizado, 0)
-  const potentialLossRupture = ruptureItems.reduce((acc, i) => acc + (i.revenueSold > 0 ? i.revenueSold : i.unitValue * 100), 0)
+  const potentialLossRupture = ruptureItems.reduce((acc, i) => acc + (i.revenueSold > 0 ? i.revenueSold : i.unitValue * 10), 0)
 
-  // Totais Físicos de Itens / Unidades em Depósito
   const totalPhysicalStockUnits = allItems.reduce((acc, i) => acc + i.currentStock, 0)
   const totalPhysicalSoldUnits = allItems.reduce((acc, i) => acc + (i.unitsSold || 0), 0)
   const deadStockPhysicalUnits = deadStockItems.reduce((acc, i) => acc + i.currentStock, 0)
   const ruptureMissingUnits = ruptureItems.reduce((acc, i) => acc + Math.max(0, i.minStock - i.currentStock), 0)
 
-  // Agrupamento por Categoria com Volume Físico de Itens
   const categoryMap = new Map()
   allItems.forEach(i => {
-    const cat = i.category || 'Geral'
+    const cat = i.category || "Geral"
     if (!categoryMap.has(cat)) {
       categoryMap.set(cat, {
         category: cat,
@@ -924,7 +722,6 @@ export function calculateStockIntelligence(salesRanking = []) {
       healthyCount: healthyItems.length,
       overstockCount: overstockItems.length,
       totalCatalogSkus: allItems.length,
-      // Métricas de Volume Físico de Itens (Peças)
       totalPhysicalStockUnits,
       totalPhysicalSoldUnits,
       deadStockPhysicalUnits,
@@ -936,51 +733,8 @@ export function calculateStockIntelligence(salesRanking = []) {
 /**
  * Helper para decompor um montante de venda em múltiplos SKUs reais da BR Lumens
  */
-export function generateItemsFromAmount(totalAmount, seedKey = '') {
-  const amount = Number(totalAmount || 0)
-  if (amount <= 0) return []
-
-  // Gera semente numérica a partir da chave do pedido para estabilidade nos dados
-  let seed = 0
-  for (let i = 0; i < seedKey.length; i++) {
-    seed = (seed + seedKey.charCodeAt(i) * (i + 1)) % 1000
-  }
-
-  const catalog = BR_LUMENS_CATALOG_PRODUCTS
-  const numItems = Math.min(catalog.length, Math.max(2, (seed % 6) + 3)) // De 3 a 7 produtos por pedido
-  const items = []
-  let remaining = amount
-
-  for (let idx = 0; idx < numItems; idx++) {
-    const prod = catalog[(seed + idx) % catalog.length]
-    const isLast = idx === numItems - 1
-
-    let itemValue = 0
-    if (isLast) {
-      itemValue = Math.max(prod.unitValue, remaining)
-    } else {
-      const weight = ((seed + idx * 7) % 30 + 15) / 100
-      itemValue = Math.min(remaining * weight, remaining * 0.7)
-      if (itemValue < prod.unitValue) itemValue = prod.unitValue * 2
-    }
-
-    const qty = Math.max(1, Math.round(itemValue / prod.unitValue))
-    const finalVal = qty * prod.unitValue
-    remaining = Math.max(0, remaining - finalVal)
-
-    items.push({
-      id: `prod-${prod.code}-${idx}`,
-      code: prod.code,
-      description: prod.description,
-      quantity: qty,
-      unitValue: prod.unitValue,
-      totalValue: finalVal
-    })
-
-    if (remaining <= 0) break
-  }
-
-  return items
+export function generateItemsFromAmount() {
+  return []
 }
 
 /**
@@ -1198,7 +952,8 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
       bankAccount: p.portador?.nome || p.portador?.descricao || 'Itaú Comex Câmbio',
       erpProvider: 'Bling ERP v3',
       documentNumber: String(p.numeroDocumento || p.id || ''),
-      barcode: p.codigoBarras || p.linhaDigitavel || null
+      barcode: p.codigoBarras || p.linhaDigitavel || null,
+      companySource: 'BR Lumens'
     }
   })
 
@@ -1253,18 +1008,8 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
             totalValue: Number(item.valorTotal || (Number(item.quantidade || 1) * Number(item.valor || item.valorUnitario || prod.preco || 0)))
           }
         })
-      } else if (docNumPed.includes('258') || docNumPed.includes('26755794093') || custNamePed.includes('IPE') || custNamePed.includes('IPÊ')) {
-        mappedItems = [
-          { id: 'item-1143', code: '1143', description: 'CORDÃO 100 LEDS C/STROBO 220V - FIO BRANCO - BF', quantity: 80, unitValue: 19.00, totalValue: 1520.00 },
-          { id: 'item-1147', code: '1147', description: 'CORDÃO 100 LEDS C/STROBO 220V - FIO VERDE - VD', quantity: 489, unitValue: 19.00, totalValue: 9291.00 },
-          { id: 'item-1157', code: '1157', description: 'MANGUEIRA C/STROBO 100M 220V - BF', quantity: 33, unitValue: 630.00, totalValue: 20790.00 },
-          { id: 'item-1204', code: '1204', description: 'CORDÃO 100 LEDS FIXO 10M FIO AZUL CLARO 220V - AZUL', quantity: 900, unitValue: 18.50, totalValue: 16650.00 },
-          { id: 'item-1234', code: '1234', description: 'CORDÃO 100 LEDS C/STROBO 220V - VERMELHO', quantity: 199, unitValue: 19.00, totalValue: 3781.00 },
-          { id: 'item-1247', code: '1247', description: 'CORDÃO 100 LEDS FIXO 10M FIO BRANCO 220V - BF', quantity: 657, unitValue: 18.50, totalValue: 12154.50 },
-          { id: 'item-1253', code: '1253', description: 'CORDÃO 100 LEDS FIXO 10M FIO AZUL ESCURO 220V - AZUL', quantity: 750, unitValue: 18.50, totalValue: 13875.00 }
-        ]
       } else {
-        mappedItems = generateItemsFromAmount(rawAmount, String(ped.numero || ped.id || idx))
+        mappedItems = []
       }
 
       const idKey = `bling-ped-${ped.id || ped.numero || idx}`
@@ -1329,7 +1074,7 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
 
     const idKey = `bling-rec-${r.id || idx}`
     if (!combinedReceivablesMap.has(idKey)) {
-      const mappedItems = generateItemsFromAmount(rawAmount, String(r.numeroDocumento || r.id || idx))
+      const mappedItems = []
       combinedReceivablesMap.set(idKey, {
         id: idKey,
         rawId: r.id,
@@ -1375,22 +1120,130 @@ export async function syncRealBlingData(targetClient, onProgress = () => {}) {
       amount: rawVal,
       status: String(nfe.situacao || nfe.status || 'Autorizada'),
       type: nfe.tipo === 0 ? 'Entrada' : 'Saída',
-      danfeUrl: nfe.linkDanfe || nfe.linkPDF || null
+      danfeUrl: nfe.linkDanfe || nfe.linkPDF || null,
+      companySource: 'BR Lumens'
     }
   })
 
-  const finalPayables = mappedPayables
-  const finalReceivables = Array.from(combinedReceivablesMap.values())
+  // 4. Integração Simultânea com a API Bling da HGE Iluminação
+  const hgeConfig = getBlingConfig('hge-iluminacao')
+  const hasHgeToken = Boolean(hgeConfig.accessToken || hgeConfig.refreshToken)
+  const hgePayables = []
+  const hgeReceivables = []
+  const hgeInvoices = []
+
+  if (hasHgeToken) {
+    try {
+      onProgress({ step: 'hge', message: 'Sincronizando faturamento e títulos da HGE Iluminação...', progress: 96 })
+      const [hgePedRaw, hgeNfesRaw, hgeRecRaw, hgePayRaw] = await Promise.all([
+        fetchBlingPedidosVendas('hge-iluminacao'),
+        fetchBlingNotasFiscais('hge-iluminacao'),
+        fetchBlingContasReceber('hge-iluminacao'),
+        fetchBlingContasPagar('hge-iluminacao')
+      ])
+
+      // Mapeia contas a pagar HGE
+      if (Array.isArray(hgePayRaw) && hgePayRaw.length > 0) {
+        hgePayRaw.filter(p => !parseBlingSituacao(p.situacao).isCanceled).forEach((p, idx) => {
+          const rawAmount = Number(p.valor || p.total || 0)
+          const sitInfo = parseBlingSituacao(p.situacao)
+          const rawSaldo = p.saldo !== undefined && p.saldo !== null ? Number(p.saldo) : (sitInfo.isPaid ? 0 : rawAmount)
+          const isPaid = sitInfo.isPaid || (rawAmount > 0 && rawSaldo === 0)
+          const isPartial = sitInfo.isPartial || (!isPaid && rawSaldo > 0 && rawSaldo < rawAmount)
+          hgePayables.push({
+            id: `hge-pay-${p.id || idx}`,
+            clientId: clientId,
+            companySource: 'HGE Iluminação',
+            description: p.historico || p.descricao || `Pagamento HGE #${p.id || idx + 1}`,
+            supplier: p.contato?.nome || p.fornecedor?.nome || 'Fornecedor HGE',
+            dueDate: p.vencimento || p.dataVencimento || todayStr,
+            amount: rawAmount,
+            amountPaid: isPaid ? rawAmount : (isPartial ? Math.max(0, rawAmount - rawSaldo) : 0),
+            amountRemaining: isPaid ? 0 : rawSaldo,
+            status: isPaid ? 'paid' : (isPartial ? 'partial' : ((p.vencimento || todayStr) < todayStr ? 'overdue' : 'scheduled')),
+            category: p.categoria?.descricao || 'Custo Operacional HGE',
+            bankAccount: 'Conta HGE PJ',
+            erpProvider: 'Bling ERP v3',
+            documentNumber: String(p.numeroDocumento || p.id || '')
+          })
+        })
+      }
+
+      // Mapeia pedidos de venda HGE
+      if (Array.isArray(hgePedRaw) && hgePedRaw.length > 0) {
+        hgePedRaw.filter(ped => !parseBlingSituacao(ped.situacao).isCanceled).forEach((ped, idx) => {
+          const rawAmount = Number(ped.total || ped.totalVenda || ped.valor || 0)
+          const sitInfo = parseBlingSituacao(ped.situacao)
+          const isReceived = sitInfo.isReceived
+          const issueDate = ped.data || ped.dataOperacao || todayStr
+          const paymentTerms = extractOrderPaymentTerms(ped, issueDate)
+          hgeReceivables.push({
+            id: `hge-ped-${ped.id || idx}`,
+            rawId: ped.id,
+            orderNumber: ped.numero || String(ped.id || idx + 1),
+            clientId: clientId,
+            companySource: 'HGE Iluminação',
+            customer: ped.contato?.nome || ped.cliente?.nome || 'Cliente HGE Iluminação',
+            customerName: ped.contato?.nome || ped.cliente?.nome || 'Cliente HGE Iluminação',
+            description: `Pedido de Venda HGE #${ped.numero || ped.id || idx + 1}`,
+            issueDate: issueDate,
+            dueDate: paymentTerms.lastDueDate || issueDate,
+            paymentDate: isReceived ? (paymentTerms.lastDueDate || issueDate) : null,
+            daysTerm: paymentTerms.daysTerm || 30,
+            paymentTerms: paymentTerms.condicao || '30 DDL',
+            parcelas: paymentTerms.parcelas || [],
+            amount: rawAmount,
+            amountPaid: isReceived ? rawAmount : 0,
+            amountRemaining: isReceived ? 0 : rawAmount,
+            status: isReceived ? 'received' : ((paymentTerms.lastDueDate || issueDate) < todayStr ? 'overdue' : 'pending'),
+            category: 'Faturamento HGE Iluminação',
+            bankAccount: 'Conta HGE PJ',
+            erpProvider: 'Bling ERP v3',
+            documentNumber: String(ped.numero || ped.id || ''),
+            paymentMethod: 'Boleto Bancário',
+            items: Array.isArray(ped.itens) ? ped.itens.map((it, itIdx) => ({ id: it.id || String(itIdx), code: it.codigo || "SKU", description: it.descricao || "Item", quantity: Number(it.quantidade || 1), unitValue: Number(it.valor || 0), totalValue: Number(it.valorTotal || 0) })) : []
+          })
+        })
+      }
+
+      // Mapeia NF-es HGE
+      if (Array.isArray(hgeNfesRaw) && hgeNfesRaw.length > 0) {
+        hgeNfesRaw.forEach((nfe, idx) => {
+          hgeInvoices.push({
+            id: `hge-nfe-${nfe.id || idx}`,
+            rawId: nfe.id,
+            companySource: 'HGE Iluminação',
+            number: String(nfe.numero || nfe.id || idx + 1),
+            series: String(nfe.serie || '1'),
+            key: nfe.chaveAcesso || nfe.chave || null,
+            issueDate: nfe.dataEmissao || nfe.data || todayStr,
+            customer: nfe.contato?.nome || nfe.cliente?.nome || 'Destinatário HGE Iluminação',
+            customerDocument: nfe.contato?.numeroDocumento || null,
+            amount: Number(nfe.valorNota || nfe.total || nfe.valor || 0),
+            status: String(nfe.situacao || nfe.status || 'Autorizada'),
+            type: nfe.tipo === 0 ? 'Entrada' : 'Saída',
+            danfeUrl: nfe.linkDanfe || nfe.linkPDF || null
+          })
+        })
+      }
+    } catch (hgeErr) {
+      console.warn('Aviso ao sincronizar HGE Iluminação:', hgeErr)
+    }
+  }
+
+  const finalPayables = [...mappedPayables.map(p => ({ ...p, companySource: 'BR Lumens' })), ...hgePayables]
+  const finalReceivables = [...Array.from(combinedReceivablesMap.values()).map(r => ({ ...r, companySource: r.companySource || 'BR Lumens' })), ...hgeReceivables]
+  const finalInvoices = [...mappedInvoices, ...hgeInvoices]
   const finalContatos = liveContatos || []
   const finalProdutos = liveProdutos || []
 
-  onProgress({ step: 'done', message: `✓ Dados da BR Lumens sincronizados com sucesso via Bling API v3!`, progress: 100 })
+  onProgress({ step: 'done', message: `✓ Dados de BR Lumens e HGE Iluminação sincronizados via Bling API v3!`, progress: 100 })
 
   return {
     success: true,
     payables: finalPayables,
     receivables: finalReceivables,
-    invoices: mappedInvoices,
+    invoices: finalInvoices,
     products: finalProdutos,
     transactions: [],
     counterparties: finalContatos,

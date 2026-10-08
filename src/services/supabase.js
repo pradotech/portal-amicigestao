@@ -408,7 +408,10 @@ export async function fetchPayablesFromSupabase(clientId) {
         bankAccount: 'Banco C6 PJ',
         barcode: p.barcode || '',
         approvalStatus: p.status === 'pending_client' ? 'pending' : 'approved',
-        hasAttachment: true
+        hasAttachment: true,
+        companySource: (p.notes && p.notes.includes('HGE')) || (p.description && p.description.includes('HGE')) || (p.supplier_name && p.supplier_name.includes('HGE'))
+          ? 'HGE Iluminação'
+          : 'BR Lumens'
       }
     })
   } catch (err) {
@@ -551,7 +554,10 @@ export async function fetchReceivablesFromSupabase(clientId) {
         daysTerm: daysTerm,
         status: mappedStatus,
         paymentMethod: r.payment_method === 'boleto' ? 'Boleto Bancário' : (r.payment_method || 'Boleto / PIX'),
-        invoiceNumber: r.invoice_number || 'NF-e Oficial'
+        invoiceNumber: r.invoice_number || 'NF-e Oficial',
+        companySource: (r.notes && r.notes.includes('HGE')) || (r.description && r.description.includes('HGE')) || (r.customer_name && r.customer_name.includes('HGE'))
+          ? 'HGE Iluminação'
+          : 'BR Lumens'
       }
     })
   } catch (err) {
@@ -932,7 +938,7 @@ export async function persistBlingSyncToSupabase(clientId, syncData) {
           due_date: p.dueDate,
           status: p.status === 'paid' ? 'paid' : (p.status === 'overdue' ? 'overdue' : (p.status === 'today' ? 'scheduled' : 'scheduled')),
           barcode: p.barcode || p.barCode || null,
-          notes: 'Sincronizado via Bling ERP v3'
+          notes: p.companySource ? `Empresa: ${p.companySource}` : 'Sincronizado via Bling ERP v3'
         }))
 
         // Limpeza atômica dos registros anteriores da BR Lumens
@@ -960,7 +966,8 @@ export async function persistBlingSyncToSupabase(clientId, syncData) {
           due_date: r.dueDate,
           status: r.status === 'received' ? 'received' : (r.status === 'overdue' ? 'overdue' : 'pending'),
           payment_method: r.paymentMethod || 'boleto',
-          invoice_number: r.invoiceNumber || null
+          invoice_number: r.invoiceNumber || null,
+          notes: r.companySource ? `Empresa: ${r.companySource}` : 'Sincronizado via Bling ERP v3'
         }))
 
         // Limpeza atômica dos registros anteriores da BR Lumens

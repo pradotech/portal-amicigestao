@@ -26,12 +26,14 @@ import {
   ChevronLeft,
   ChevronsLeft,
   ChevronsRight,
-  ShieldCheck
+  ShieldCheck,
+  Layers,
+  Zap
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { DateFilterBar } from '../../components/DateFilterBar'
 import { useDateFilter } from '../../hooks/useDateFilter'
-import { generateItemsFromAmount } from '../../services/blingService'
+
 
 export function BrlumensCustomersView({
   receivables = [],
@@ -69,20 +71,46 @@ export function BrlumensCustomersView({
     filterByDate
   } = dateFilter
 
-  // Garante isolamento estrito: apenas títulos da BR Lumens (Bling ERP)
+  // Alternador de Contas Bling: 'all' (Consolidado) | 'brlumens' (BR Lumens) | 'hge' (HGE Iluminação)
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState('all')
+
+  // Isolamento de títulos das empresas do grupo (BR Lumens e HGE Iluminação)
   const allBrlumensReceivables = useMemo(() => {
     return receivables.filter(r => 
       !r.clientId ||
       r.clientId === 'd0000000-0000-0000-0000-000000000002' ||
       r.erpProvider === 'Bling ERP v3' ||
       String(r.id).startsWith('bling-')
-    )
+    ).map(r => ({
+      ...r,
+      companySource: r.companySource || (
+        (r.notes && r.notes.includes('HGE')) ||
+        (r.description && r.description.includes('HGE')) ||
+        (r.customer && r.customer.includes('HGE')) ||
+        (r.customerName && r.customerName.includes('HGE')) ||
+        String(r.id).includes('hge') ||
+        String(r.category || '').includes('HGE')
+          ? 'HGE Iluminação'
+          : 'BR Lumens'
+      )
+    }))
   }, [receivables])
+
+  // Filtragem por empresa selecionada
+  const companyFilteredReceivables = useMemo(() => {
+    if (selectedCompanyFilter === 'brlumens') {
+      return allBrlumensReceivables.filter(r => r.companySource === 'BR Lumens')
+    }
+    if (selectedCompanyFilter === 'hge') {
+      return allBrlumensReceivables.filter(r => r.companySource === 'HGE Iluminação')
+    }
+    return allBrlumensReceivables
+  }, [allBrlumensReceivables, selectedCompanyFilter])
 
   // Filtra lançamentos do Bling pelo período selecionado no DateFilterBar
   const dateFilteredReceivables = useMemo(() => {
-    return filterByDate(allBrlumensReceivables, 'dueDate')
-  }, [allBrlumensReceivables, filterByDate])
+    return filterByDate(companyFilteredReceivables, 'dueDate')
+  }, [companyFilteredReceivables, filterByDate])
 
   const filteredReceivables = useMemo(() => {
     return dateFilteredReceivables.filter(receivable => {
@@ -189,25 +217,8 @@ export function BrlumensCustomersView({
   const productRanking = useMemo(() => {
     const map = new Map()
     dateFilteredReceivables.forEach(r => {
-      let items = r.items || []
-      const doc = String(r.orderNumber || r.documentNumber || r.id || '')
-      const cust = String(r.customer || r.customerName || '').toUpperCase()
+      const items = r.items || []
 
-      if (!items || items.length === 0) {
-        if (doc.includes('258') || doc.includes('26755794093') || cust.includes('IPE') || cust.includes('IPÊ')) {
-          items = [
-            { code: '1143', description: 'CORDÃO 100 LEDS C/STROBO 220V - FIO BRANCO - BF', quantity: 80, unitValue: 19.00, totalValue: 1520.00 },
-            { code: '1147', description: 'CORDÃO 100 LEDS C/STROBO 220V - FIO VERDE - VD', quantity: 489, unitValue: 19.00, totalValue: 9291.00 },
-            { code: '1157', description: 'MANGUEIRA C/STROBO 100M 220V - BF', quantity: 33, unitValue: 630.00, totalValue: 20790.00 },
-            { code: '1204', description: 'CORDÃO 100 LEDS FIXO 10M FIO AZUL CLARO 220V - AZUL', quantity: 900, unitValue: 18.50, totalValue: 16650.00 },
-            { code: '1234', description: 'CORDÃO 100 LEDS C/STROBO 220V - VERMELHO', quantity: 199, unitValue: 19.00, totalValue: 3781.00 },
-            { code: '1247', description: 'CORDÃO 100 LEDS FIXO 10M FIO BRANCO 220V - BF', quantity: 657, unitValue: 18.50, totalValue: 12154.50 },
-            { code: '1253', description: 'CORDÃO 100 LEDS FIXO 10M FIO AZUL ESCURO 220V - AZUL', quantity: 750, unitValue: 18.50, totalValue: 13875.00 }
-          ]
-        } else {
-          items = generateItemsFromAmount(r.amount, doc)
-        }
-      }
 
       if (items && items.length > 0) {
         items.forEach(item => {
@@ -261,17 +272,59 @@ export function BrlumensCustomersView({
           </p>
         </div>
 
-        {onSyncApi && (
-          <button
-            type="button"
-            onClick={onSyncApi}
-            disabled={isSyncing}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-950/40 transition-all active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Sincronizando com Bling...' : 'Sincronizar Vendas Bling API'}</span>
-          </button>
-        )}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          {/* Alternador de Empresas / Contas do Bling */}
+          <div className="inline-flex p-1 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setSelectedCompanyFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                selectedCompanyFilter === 'all'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Consolidado</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedCompanyFilter('brlumens')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                selectedCompanyFilter === 'brlumens'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 text-emerald-300" />
+              <span>BR Lumens</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedCompanyFilter('hge')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                selectedCompanyFilter === 'hge'
+                  ? 'bg-amber-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300" />
+              <span>HGE Iluminação</span>
+            </button>
+          </div>
+
+          {onSyncApi && (
+            <button
+              type="button"
+              onClick={onSyncApi}
+              disabled={isSyncing}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-950/40 transition-all active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Bling API'}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 2. Barra Global de Datas em Formato de Calendário */}
@@ -286,7 +339,7 @@ export function BrlumensCustomersView({
         handleNextMonth={handleNextMonth}
         periodLabel={periodLabel}
         filteredCount={dateFilteredReceivables.length}
-        totalCount={allBrlumensReceivables.length}
+        totalCount={companyFilteredReceivables.length}
         receivablesTotal={metrics.totalPeriod}
         showAmounts={true}
       />

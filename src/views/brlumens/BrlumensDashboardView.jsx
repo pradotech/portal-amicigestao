@@ -38,12 +38,13 @@ import {
   Boxes,
   ShieldAlert,
   Archive,
+  Building2,
   TrendingDown
 } from 'lucide-react'
 import { formatCurrency, formatCompactCurrency, formatDate, MONTH_NAMES } from '../../utils/formatters'
 import { DateFilterBar } from '../../components/DateFilterBar'
 import { useDateFilter } from '../../hooks/useDateFilter'
-import { generateItemsFromAmount, extractOrderPaymentTerms, calculateStockIntelligence, BR_LUMENS_CATALOG_PRODUCTS } from '../../services/blingService'
+import { extractOrderPaymentTerms, calculateStockIntelligence } from '../../services/blingService'
 
 export function BrlumensDashboardView({
   clients = [],
@@ -118,7 +119,10 @@ export function BrlumensDashboardView({
     filterByDate
   } = dateFilter
 
-  // Isolamento estrito: apenas títulos da BR Lumens
+  // Alternador de Contas Bling: 'all' (Consolidado) | 'brlumens' (BR Lumens) | 'hge' (HGE Iluminação)
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState('all')
+
+  // Isolamento de títulos das empresas do grupo (BR Lumens e HGE Iluminação)
   const allBrlumensReceivables = useMemo(() => {
     return receivables
       .filter(r => 
@@ -133,15 +137,36 @@ export function BrlumensDashboardView({
           ...r,
           daysTerm: r.daysTerm || pTerms.daysTerm || 44,
           paymentTerms: r.paymentTerms || pTerms.condicao || '29 44 59',
-          parcelas: r.parcelas && r.parcelas.length > 0 ? r.parcelas : (pTerms.parcelas || [])
+          parcelas: r.parcelas && r.parcelas.length > 0 ? r.parcelas : (pTerms.parcelas || []),
+          companySource: r.companySource || (
+            (r.notes && r.notes.includes('HGE')) ||
+            (r.description && r.description.includes('HGE')) ||
+            (r.customer && r.customer.includes('HGE')) ||
+            (r.customerName && r.customerName.includes('HGE')) ||
+            String(r.id).includes('hge') ||
+            String(r.category || '').includes('HGE')
+              ? 'HGE Iluminação'
+              : 'BR Lumens'
+          )
         }
       })
   }, [receivables])
 
+  // Filtragem conforme a empresa selecionada no alternador
+  const filteredByCompanyReceivables = useMemo(() => {
+    if (selectedCompanyFilter === 'brlumens') {
+      return allBrlumensReceivables.filter(r => r.companySource === 'BR Lumens')
+    }
+    if (selectedCompanyFilter === 'hge') {
+      return allBrlumensReceivables.filter(r => r.companySource === 'HGE Iluminação')
+    }
+    return allBrlumensReceivables
+  }, [allBrlumensReceivables, selectedCompanyFilter])
+
   // Filtragem pelo período ativo
   const periodReceivables = useMemo(() => {
-    return filterByDate(allBrlumensReceivables, 'dueDate')
-  }, [allBrlumensReceivables, filterByDate])
+    return filterByDate(filteredByCompanyReceivables, 'dueDate')
+  }, [filteredByCompanyReceivables, filterByDate])
 
   // Helper de situação
   const isReceived = (r) => r.status === 'received' || r.status === 'paid'
@@ -188,22 +213,22 @@ export function BrlumensDashboardView({
   }, [periodReceivables])
 
   // =========================================================================
-  // 2. CÁLCULOS ACUMULADOS HISTÓRICOS (GERAL)
+  // 2. CÁLCULOS ACUMULADOS HISTÓRICOS (GERAL DA EMPRESA SELECIONADA)
   // =========================================================================
   const generalMetrics = useMemo(() => {
-    const totalOrdersAll = allBrlumensReceivables.length
-    const atendidosAll = allBrlumensReceivables.filter(isReceived)
-    const pendentesAll = allBrlumensReceivables.filter(r => !isReceived(r))
+    const totalOrdersAll = filteredByCompanyReceivables.length
+    const atendidosAll = filteredByCompanyReceivables.filter(isReceived)
+    const pendentesAll = filteredByCompanyReceivables.filter(r => !isReceived(r))
 
     const totalFaturadoGeral = atendidosAll.reduce((acc, r) => acc + Number(r.amountPaid || r.amount || 0), 0)
     const totalPendenteGeral = pendentesAll.reduce((acc, r) => acc + Number(r.amountRemaining || r.amount || 0), 0)
-    const totalGeralAcumulado = allBrlumensReceivables.reduce((acc, r) => acc + Number(r.amount || 0), 0)
+    const totalGeralAcumulado = filteredByCompanyReceivables.reduce((acc, r) => acc + Number(r.amount || 0), 0)
 
     const ticketMedioGeral = totalOrdersAll > 0 ? (totalGeralAcumulado / totalOrdersAll) : 0
 
     let totalWeightedDays = 0
     let totalWeightAmount = 0
-    allBrlumensReceivables.forEach(r => {
+    filteredByCompanyReceivables.forEach(r => {
       const amt = Number(r.amount || 0)
       const days = Number(r.daysTerm || 44)
       if (amt > 0) {
@@ -223,7 +248,7 @@ export function BrlumensDashboardView({
       ticketMedioGeral,
       pmrGeral
     }
-  }, [allBrlumensReceivables])
+  }, [filteredByCompanyReceivables])
 
   // =========================================================================
   // 3. RANKING DE CLIENTES (MÊS vs GERAL)
@@ -263,7 +288,7 @@ export function BrlumensDashboardView({
   }
 
   const rankingCustomersPeriod = useMemo(() => getCustomerRanking(periodReceivables), [periodReceivables])
-  const rankingCustomersAll = useMemo(() => getCustomerRanking(allBrlumensReceivables), [allBrlumensReceivables])
+  const rankingCustomersAll = useMemo(() => getCustomerRanking(filteredByCompanyReceivables), [filteredByCompanyReceivables])
   const activeCustomerRanking = customerRankingScope === 'period' ? rankingCustomersPeriod : rankingCustomersAll
   const topCustomer = activeCustomerRanking[0] || null
 
@@ -293,25 +318,7 @@ export function BrlumensDashboardView({
     const productMap = new Map()
 
     items.forEach(r => {
-      let orderItems = r.items || []
-      const doc = String(r.orderNumber || r.documentNumber || r.id || '')
-      const cust = String(r.customer || r.customerName || '').toUpperCase()
-
-      if (!orderItems || orderItems.length === 0) {
-        if (doc.includes('258') || doc.includes('26755794093') || cust.includes('IPE') || cust.includes('IPÊ')) {
-          orderItems = [
-            { code: '1143', description: 'CORDÃO 100 LEDS C/STROBO 220V - FIO BRANCO - BF', quantity: 80, unitValue: 19.00, totalValue: 1520.00 },
-            { code: '1147', description: 'CORDÃO 100 LEDS C/STROBO 220V - FIO VERDE - VD', quantity: 489, unitValue: 19.00, totalValue: 9291.00 },
-            { code: '1157', description: 'MANGUEIRA C/STROBO 100M 220V - BF', quantity: 33, unitValue: 630.00, totalValue: 20790.00 },
-            { code: '1204', description: 'CORDÃO 100 LEDS FIXO 10M FIO AZUL CLARO 220V - AZUL', quantity: 900, unitValue: 18.50, totalValue: 16650.00 },
-            { code: '1234', description: 'CORDÃO 100 LEDS C/STROBO 220V - VERMELHO', quantity: 199, unitValue: 19.00, totalValue: 3781.00 },
-            { code: '1247', description: 'CORDÃO 100 LEDS FIXO 10M FIO BRANCO 220V - BF', quantity: 657, unitValue: 18.50, totalValue: 12154.50 },
-            { code: '1253', description: 'CORDÃO 100 LEDS FIXO 10M FIO AZUL ESCURO 220V - AZUL', quantity: 750, unitValue: 18.50, totalValue: 13875.00 }
-          ]
-        } else {
-          orderItems = generateItemsFromAmount(r.amount, doc)
-        }
-      }
+      const orderItems = r.items || []
 
       if (orderItems && orderItems.length > 0) {
         orderItems.forEach(item => {
@@ -360,7 +367,7 @@ export function BrlumensDashboardView({
   }
 
   const rankingProductsPeriod = useMemo(() => getProductRanking(periodReceivables), [periodReceivables])
-  const rankingProductsAll = useMemo(() => getProductRanking(allBrlumensReceivables), [allBrlumensReceivables])
+  const rankingProductsAll = useMemo(() => getProductRanking(filteredByCompanyReceivables), [filteredByCompanyReceivables])
   const baseProductRanking = productRankingScope === 'period' ? rankingProductsPeriod : rankingProductsAll
 
   // Ordenação de produtos (por faturamento ou volume)
@@ -432,7 +439,7 @@ export function BrlumensDashboardView({
     const history = []
     for (let m = 1; m <= 12; m++) {
       const monthStr = `${selectedYear}-${String(m).padStart(2, '0')}`
-      const monthItems = allBrlumensReceivables.filter(r => {
+      const monthItems = filteredByCompanyReceivables.filter(r => {
         const d = r.dueDate || r.issueDate || ''
         return d.startsWith(monthStr)
       })
@@ -462,7 +469,7 @@ export function BrlumensDashboardView({
       percentOfMax: (h.total / maxTotal) * 100,
       percentOfMaxOrders: (h.ordersCount / maxOrders) * 100
     }))
-  }, [allBrlumensReceivables, selectedYear])
+  }, [filteredByCompanyReceivables, selectedYear])
 
   // =========================================================================
   // 6. MODAL DE DRILL-DOWN
@@ -519,7 +526,7 @@ export function BrlumensDashboardView({
         itemType: 'receivable'
       })
     } else if (type === 'cliente_pedidos' && customPayload) {
-      const clientItems = allBrlumensReceivables.filter(r => (r.customer || r.customerName) === customPayload.name)
+      const clientItems = filteredByCompanyReceivables.filter(r => (r.customer || r.customerName) === customPayload.name)
       setModalDetail({
         isOpen: true,
         type: 'cliente_pedidos',
@@ -593,27 +600,75 @@ export function BrlumensDashboardView({
               <Zap className="w-4 h-4" />
               <span>Divisão Amici Comex • Inteligência de Vendas & Faturamento</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              {currentClient.legalName || 'BR Lumens Comércio e Importação de Iluminação Ltda'}
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+              <span>
+                {selectedCompanyFilter === 'all'
+                  ? 'BR Lumens & HGE Iluminação (Consolidado)'
+                  : selectedCompanyFilter === 'hge'
+                    ? 'HGE Iluminação'
+                    : 'BR Lumens Comércio e Importação de Iluminação Ltda'}
+              </span>
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Painel de Vendas, NF-e, Ticket Médio, Clientes e Prazos • Dados sincronizados via <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Bling API v3</span>
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 shadow-inner">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-              Bling ERP v3 Ativo
-            </span>
-            <button
-              type="button"
-              onClick={() => onNavigateTab && onNavigateTab('customers')}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5 shadow-sm"
-            >
-              <FileCheck className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-              <span>Ver NF-e & Títulos</span>
-            </button>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            {/* Alternador de Empresas / Contas do Bling */}
+            <div className="inline-flex p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setSelectedCompanyFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  selectedCompanyFilter === 'all'
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Consolidado</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCompanyFilter('brlumens')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  selectedCompanyFilter === 'brlumens'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5 text-emerald-300" />
+                <span>BR Lumens</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCompanyFilter('hge')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  selectedCompanyFilter === 'hge'
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-300" />
+                <span>HGE Iluminação</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 shadow-inner">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
+                Bling API Ativa
+              </span>
+              <button
+                type="button"
+                onClick={() => onNavigateTab && onNavigateTab('customers')}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5 shadow-sm"
+              >
+                <FileCheck className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                <span>NF-e & Títulos</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -630,7 +685,7 @@ export function BrlumensDashboardView({
         handleNextMonth={handleNextMonth}
         periodLabel={periodLabel}
         filteredCount={periodReceivables.length}
-        totalCount={allBrlumensReceivables.length}
+        totalCount={filteredByCompanyReceivables.length}
         receivablesTotal={periodMetrics.totalGeralPeriodo}
         showAmounts={true}
       />

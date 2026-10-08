@@ -20,7 +20,9 @@ import {
   Calendar,
   RefreshCw,
   Globe,
-  Ship
+  Ship,
+  Layers,
+  Zap
 } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusBadge } from '../../utils/formatters'
 import { DateFilterBar } from '../../components/DateFilterBar'
@@ -67,15 +69,40 @@ export function BrlumensSuppliersView({
     filterByDate
   } = dateFilter
 
-  // Garante isolamento estrito: apenas títulos da BR Lumens (Bling ERP)
-  const clientPayables = payables.filter(p => 
-    p.clientId === 'd0000000-0000-0000-0000-000000000002' ||
-    p.erpProvider === 'Bling ERP v3' ||
-    String(p.id).startsWith('bling-')
-  )
+  // Alternador de Contas Bling: 'all' (Consolidado) | 'brlumens' (BR Lumens) | 'hge' (HGE Iluminação)
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState('all')
+
+  // Garante isolamento estrito: títulos das empresas do grupo (BR Lumens e HGE Iluminação)
+  const clientPayables = payables
+    .filter(p => 
+      !p.clientId ||
+      p.clientId === 'd0000000-0000-0000-0000-000000000002' ||
+      p.erpProvider === 'Bling ERP v3' ||
+      String(p.id).startsWith('bling-')
+    )
+    .map(p => ({
+      ...p,
+      companySource: p.companySource || (
+        (p.notes && p.notes.includes('HGE')) ||
+        (p.description && p.description.includes('HGE')) ||
+        (p.supplier && p.supplier.includes('HGE')) ||
+        (p.supplier_name && p.supplier_name.includes('HGE')) ||
+        String(p.id).includes('hge') ||
+        String(p.category || '').includes('HGE')
+          ? 'HGE Iluminação'
+          : 'BR Lumens'
+      )
+    }))
+
+  // Filtragem conforme a empresa selecionada
+  const companyFilteredPayables = clientPayables.filter(p => {
+    if (selectedCompanyFilter === 'brlumens') return p.companySource === 'BR Lumens'
+    if (selectedCompanyFilter === 'hge') return p.companySource === 'HGE Iluminação'
+    return true
+  })
 
   // Filtra lançamentos a pagar do Bling pelo período selecionado no DateFilterBar
-  const dateFilteredPayables = filterByDate(clientPayables, 'dueDate')
+  const dateFilteredPayables = filterByDate(companyFilteredPayables, 'dueDate')
 
   // Aplica filtros adicionais de busca e status sobre os dados filtrados por data
   const filteredPayables = dateFilteredPayables.filter(payable => {
@@ -171,7 +198,47 @@ export function BrlumensSuppliersView({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          {/* Alternador de Empresas / Contas do Bling */}
+          <div className="inline-flex p-1 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setSelectedCompanyFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                selectedCompanyFilter === 'all'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Consolidado</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedCompanyFilter('brlumens')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                selectedCompanyFilter === 'brlumens'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 text-emerald-300" />
+              <span>BR Lumens</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedCompanyFilter('hge')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                selectedCompanyFilter === 'hge'
+                  ? 'bg-amber-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300" />
+              <span>HGE Iluminação</span>
+            </button>
+          </div>
+
           {onSyncApi && (
             <button
               type="button"
@@ -180,7 +247,7 @@ export function BrlumensSuppliersView({
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700 text-emerald-300 text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Sincronizando com Bling...' : 'Sincronizar Bling ERP'}</span>
+              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Bling ERP'}</span>
             </button>
           )}
 
